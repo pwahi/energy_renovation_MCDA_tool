@@ -78,8 +78,22 @@
             <p>Select explicit Saaty 1-9 rankings for each comparison, or use Socratic derive to convert stakeholder priorities into a first-pass AHP matrix.</p>
           </div>
           <div class="actions">
+            <button id="addParticipantButton" class="ghost" type="button">Add participant</button>
+            <button id="duplicateParticipantButton" class="ghost" type="button">Duplicate</button>
             <button id="equalWeightsButton" class="ghost" type="button">Equal weights</button>
             <button id="socraticButton" type="button">Socratic derive</button>
+          </div>
+        </div>
+
+        <div class="participant-panel">
+          <div>
+            <h3>Participants</h3>
+            <div id="participantList" class="participant-list"></div>
+          </div>
+          <div class="panel">
+            <h3>Group weights</h3>
+            <div id="groupSummary"></div>
+            <div id="groupWeightBars"></div>
           </div>
         </div>
 
@@ -110,8 +124,19 @@
             <h2>TOPSIS Ranking</h2>
             <p>Ranks alternatives using normalized weighted scores, ideal solutions, distances, and closeness index.</p>
           </div>
-          <button id="rankButton" type="button">Calculate ranking</button>
+          <div class="ranking-controls">
+            <label class="stacked compact-label">
+              Weight source
+              <select id="weightSourceSelect">
+                <option value="group">Aggregated group weights</option>
+                <option value="participant">Selected participant</option>
+                <option value="equal">Equal fallback</option>
+              </select>
+            </label>
+            <button id="rankButton" type="button">Calculate ranking</button>
+          </div>
         </div>
+        <div id="weightSourceNotice" class="helper"></div>
         <div id="gateWarnings"></div>
         <div id="rankingChart" class="ranking-chart"></div>
         <div class="table-wrap">

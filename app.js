@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'renoDecisionSupportState.v2';
+const STORAGE_KEY = 'renoDecisionSupportState.v3';
 
 const RI = {
   1: 0,
@@ -46,22 +46,79 @@ function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      return normalizeState(JSON.parse(saved));
     } catch {
       localStorage.removeItem(STORAGE_KEY);
     }
   }
+  const legacy = localStorage.getItem('renoDecisionSupportState.v2');
+  if (legacy) {
+    try {
+      return normalizeState(JSON.parse(legacy));
+    } catch {
+      localStorage.removeItem('renoDecisionSupportState.v2');
+    }
+  }
   const criteria = structuredClone(defaultCriteria);
-  return {
+  return normalizeState({
     criteria,
     alternatives: structuredClone(sampleAlternatives),
-    comparisons: {},
-    manualWeights: equalWeights(criteria.filter((criterion) => criterion.active)),
-  };
+    participants: [createParticipant('Participant 1')],
+    selectedParticipantId: null,
+    rankingWeightSource: 'group',
+  });
 }
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function normalizeState(candidate) {
+  const criteria = Array.isArray(candidate.criteria) ? candidate.criteria : structuredClone(defaultCriteria);
+  const legacyComparisons = candidate.comparisons && typeof candidate.comparisons === 'object' ? candidate.comparisons : {};
+  const participants = Array.isArray(candidate.participants) && candidate.participants.length
+    ? candidate.participants.map((participant, index) => normalizeParticipant(participant, index))
+    : [createParticipant('Participant 1', legacyComparisons, candidate.socraticInput || '')];
+  const selectedParticipantId = participants.some((participant) => participant.id === candidate.selectedParticipantId)
+    ? candidate.selectedParticipantId
+    : participants[0].id;
+
+  return {
+    criteria,
+    alternatives: Array.isArray(candidate.alternatives) ? candidate.alternatives : structuredClone(sampleAlternatives),
+    participants,
+    selectedParticipantId,
+    rankingWeightSource: candidate.rankingWeightSource || 'group',
+  };
+}
+
+function createParticipant(name, comparisons = {}, socraticInput = '') {
+  return {
+    id: crypto.randomUUID(),
+    name,
+    comparisons: structuredClone(comparisons),
+    socraticInput,
+    complete: false,
+  };
+}
+
+function normalizeParticipant(participant, index) {
+  return {
+    id: participant.id || crypto.randomUUID(),
+    name: participant.name || `Participant ${index + 1}`,
+    comparisons: participant.comparisons && typeof participant.comparisons === 'object' ? participant.comparisons : {},
+    socraticInput: participant.socraticInput || '',
+    complete: Boolean(participant.complete),
+  };
+}
+
+function selectedParticipant() {
+  let participant = state.participants.find((item) => item.id === state.selectedParticipantId);
+  if (!participant) {
+    participant = state.participants[0];
+    state.selectedParticipantId = participant.id;
+  }
+  return participant;
 }
 
 function activeCriteria() {
@@ -77,11 +134,22 @@ function comparisonKey(leftId, rightId) {
   return `${leftId}|${rightId}`;
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
 function render() {
   renderCriteria();
   renderScores();
+  renderParticipants();
   renderComparisons();
   renderWeights();
+  renderGroupWeights();
   renderRanking();
   saveState();
 }
@@ -146,9 +214,77 @@ function renderScores() {
   `;
 }
 
+function renderParticipants() {
+  const list = document.querySelector('#participantList');
+  if (!list) return;
+
+  list.innerHTML = state.participants.map((participant) => {
+    const result = ahpResult(participant.comparisons);
+    const included = participant.complete && result.cr <= 0.1;
+    const status = participant.complete ? (included ? 'included' : 'review') : 'pending';
+    const active = participant.id === state.selectedParticipantId ? 'active' : '';
+    const name = escapeHtml(participant.name);
+    return `
+      <article class="participant-card ${active}" data-participant-card="${participant.id}">
+        <button class="participant-select" type="button" data-select-participant="${participant.id}">
+          <strong>${name}</strong>
+          <span class="${included ? 'good' : participant.complete ? 'bad' : ''}">CR ${Number.isFinite(result.cr) ? result.cr.toFixed(3) : 'n/a'} · ${status}</span>
+        </button>
+        <div class="participant-tools">
+          <input value="${name}" data-participant-name="${participant.id}" aria-label="Participant name" />
+          <button class="ghost delete" type="button" data-delete-participant="${participant.id}" ${state.participants.length === 1 ? 'disabled' : ''}>Delete</button>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function aggregateGroupWeights() {
+  const criteria = activeCriteria();
+  const included = state.participants
+    .map((participant) => ({ participant, result: ahpResult(participant.comparisons) }))
+    .filter((item) => item.participant.complete && item.result.cr <= 0.1);
+
+  if (!criteria.length || !included.length) {
+    return { weights: equalWeights(criteria), included, excludedCount: state.participants.length };
+  }
+
+  const geometric = {};
+  for (const criterion of criteria) {
+    const product = included.reduce((value, item) => value * Math.max(item.result.weights[criterion.id] ?? 0, 0.000001), 1);
+    geometric[criterion.id] = product ** (1 / included.length);
+  }
+
+  const total = Object.values(geometric).reduce((sum, value) => sum + value, 0) || 1;
+  const weights = Object.fromEntries(Object.entries(geometric).map(([id, value]) => [id, value / total]));
+  return { weights, included, excludedCount: state.participants.length - included.length };
+}
+
+function renderGroupWeights() {
+  const summary = document.querySelector('#groupSummary');
+  const bars = document.querySelector('#groupWeightBars');
+  if (!summary || !bars) return;
+
+  const group = aggregateGroupWeights();
+  summary.innerHTML = `
+    <p class="meta">${group.included.length} participant${group.included.length === 1 ? '' : 's'} included · ${group.excludedCount} not included</p>
+    <p class="meta">Aggregation: geometric mean of consistent AHP profiles.</p>
+  `;
+  bars.innerHTML = activeCriteria().map((criterion) => `
+    <div class="bar-row">
+      <div>
+        <div>${criterion.id} ${criterion.name}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(group.weights[criterion.id] ?? 0) * 100}%"></div></div>
+      </div>
+      <strong>${(((group.weights[criterion.id] ?? 0) * 100)).toFixed(1)}%</strong>
+    </div>
+  `).join('');
+}
+
 function renderComparisons() {
   const list = document.querySelector('#comparisonList');
   const criteria = activeCriteria();
+  const participant = selectedParticipant();
   list.innerHTML = '';
 
   if (criteria.length > 8) {
@@ -163,7 +299,7 @@ function renderComparisons() {
       const left = criteria[i];
       const right = criteria[j];
       const key = comparisonKey(left.id, right.id);
-      const value = state.comparisons[key] ?? 1;
+      const value = participant.comparisons[key] ?? 1;
       const item = document.createElement('div');
       item.className = 'comparison';
       item.innerHTML = `
@@ -215,7 +351,7 @@ function formatSaatyDetail(value, leftId, rightId) {
   return `${stronger} is ${label} more important than ${weaker} (Saaty ${score.toFixed(0)})`;
 }
 
-function ahpResult() {
+function ahpResult(comparisons = selectedParticipant().comparisons) {
   const criteria = activeCriteria();
   const n = criteria.length;
   if (!n) return { weights: {}, cr: 0, lambdaMax: 0 };
@@ -223,7 +359,7 @@ function ahpResult() {
 
   for (let i = 0; i < n; i += 1) {
     for (let j = i + 1; j < n; j += 1) {
-      const value = state.comparisons[comparisonKey(criteria[i].id, criteria[j].id)] ?? 1;
+      const value = comparisons[comparisonKey(criteria[i].id, criteria[j].id)] ?? 1;
       matrix[i][j] = value;
       matrix[j][i] = 1 / value;
     }
@@ -245,8 +381,8 @@ function ahpResult() {
 }
 
 function renderWeights() {
-  const { weights, cr } = ahpResult();
-  state.manualWeights = weights;
+  const participant = selectedParticipant();
+  const { weights, cr } = ahpResult(participant.comparisons);
   const bars = document.querySelector('#weightBars');
   bars.innerHTML = activeCriteria().map((criterion) => `
     <div class="bar-row">
@@ -261,14 +397,46 @@ function renderWeights() {
   const consistency = document.querySelector('#consistency');
   consistency.className = `metric ${cr <= 0.1 ? 'pass' : 'fail'}`;
   consistency.textContent = `Consistency ratio: ${Number.isFinite(cr) ? cr.toFixed(3) : 'n/a'} (${cr <= 0.1 ? 'pass' : 'review needed'})`;
+
+  const socraticInput = document.querySelector('#socraticInput');
+  if (socraticInput && socraticInput.value !== participant.socraticInput) {
+    socraticInput.value = participant.socraticInput;
+  }
+}
+
+function gateFailure(alternative) {
+  const c1 = Number(alternative.scores.C1);
+  const c10 = Number(alternative.scores.C10);
+  return Number.isFinite(c1) && Number.isFinite(c10) && (c1 > 50 || c10 > 100);
+}
+
+function rankingWeightContext() {
+  const criteria = activeCriteria();
+  if (state.rankingWeightSource === 'equal') {
+    return { weights: equalWeights(criteria), label: 'Equal fallback weights' };
+  }
+
+  if (state.rankingWeightSource === 'participant') {
+    const participant = selectedParticipant();
+    return { weights: ahpResult(participant.comparisons).weights, label: `${escapeHtml(participant.name)} weights` };
+  }
+
+  const group = aggregateGroupWeights();
+  if (group.included.length) {
+    return { weights: group.weights, label: `Aggregated group weights (${group.included.length} consistent participant${group.included.length === 1 ? '' : 's'})` };
+  }
+
+  return { weights: equalWeights(criteria), label: 'Equal fallback weights (no consistent participant profiles yet)' };
 }
 
 function calculateTopsis() {
   const criteria = activeCriteria();
-  const alternatives = state.alternatives.filter((alternative) => criteria.every((criterion) => Number.isFinite(Number(alternative.scores[criterion.id]))));
+  const alternatives = state.alternatives.filter((alternative) => {
+    return !gateFailure(alternative) && criteria.every((criterion) => Number.isFinite(Number(alternative.scores[criterion.id])));
+  });
   if (!criteria.length || !alternatives.length) return [];
 
-  const weights = state.manualWeights;
+  const weights = rankingWeightContext().weights;
   const columns = criteria.map((criterion) => alternatives.map((alternative) => Number(alternative.scores[criterion.id])));
   const denominators = columns.map((column) => Math.sqrt(column.reduce((sum, value) => sum + value ** 2, 0)) || 1);
   const weighted = alternatives.map((alternative) => criteria.map((criterion, index) => {
@@ -297,6 +465,15 @@ function renderRanking() {
   const results = calculateTopsis();
   const table = document.querySelector('#rankingTable');
   const chart = document.querySelector('#rankingChart');
+  const context = rankingWeightContext();
+  const sourceSelect = document.querySelector('#weightSourceSelect');
+  if (sourceSelect && sourceSelect.value !== state.rankingWeightSource) sourceSelect.value = state.rankingWeightSource;
+
+  const notice = document.querySelector('#weightSourceNotice');
+  if (notice) {
+    notice.innerHTML = `<strong>Ranking weight source</strong><p>${context.label}</p>`;
+  }
+
   chart.innerHTML = results.length
     ? results.map((result, index) => `
       <div class="rank-bar">
@@ -326,18 +503,17 @@ function renderRanking() {
     </tbody>
   `;
 
-  const warnings = state.alternatives.filter((alternative) => {
-    const c1 = Number(alternative.scores.C1);
-    const c10 = Number(alternative.scores.C10);
-    return Number.isFinite(c1) && Number.isFinite(c10) && (c1 > 50 || c10 > 100);
-  });
+  const warnings = state.alternatives.filter(gateFailure);
   document.querySelector('#gateWarnings').innerHTML = warnings.length
-    ? `<div class="warning">Gate warning: ${warnings.map((warning) => warning.name).join(', ')} may fail C1/C10 readiness thresholds. These are flagged, not blocked.</div>`
+    ? `<div class="warning">LTH gate exclusion: ${warnings.map((warning) => warning.name).join(', ')} failed C1/C10 thresholds and were excluded before TOPSIS.</div>`
     : '';
 }
 
 function deriveSocraticWeights() {
-  const text = document.querySelector('#socraticInput').value.toLowerCase();
+  const participant = selectedParticipant();
+  const input = document.querySelector('#socraticInput').value;
+  participant.socraticInput = input;
+  const text = input.toLowerCase();
   const criteria = activeCriteria();
   const terms = {
     cost: ['cost', 'investment', 'budget', 'life cycle', 'payback', 'rent'],
@@ -360,8 +536,9 @@ function deriveSocraticWeights() {
   }
 
   const total = Object.values(scores).reduce((sum, value) => sum + value, 0);
-  state.manualWeights = Object.fromEntries(Object.entries(scores).map(([id, score]) => [id, score / total]));
-  state.comparisons = weightsToApproxComparisons(state.manualWeights, criteria);
+  const weights = Object.fromEntries(Object.entries(scores).map(([id, score]) => [id, score / total]));
+  participant.comparisons = weightsToApproxComparisons(weights, criteria);
+  participant.complete = true;
   render();
 }
 
@@ -390,12 +567,28 @@ document.addEventListener('click', (event) => {
   if (deleteCriterion) {
     state.criteria = state.criteria.filter((criterion) => criterion.id !== deleteCriterion || criterion.mandatory);
     for (const alternative of state.alternatives) delete alternative.scores[deleteCriterion];
+    for (const participant of state.participants) {
+      participant.comparisons = Object.fromEntries(Object.entries(participant.comparisons).filter(([key]) => !key.split('|').includes(deleteCriterion)));
+    }
     render();
   }
 
   const deleteAlternative = event.target.dataset.deleteAlt;
   if (deleteAlternative) {
     state.alternatives = state.alternatives.filter((alternative) => alternative.id !== deleteAlternative);
+    render();
+  }
+
+  const selectParticipant = event.target.closest('[data-select-participant]')?.dataset.selectParticipant;
+  if (selectParticipant) {
+    state.selectedParticipantId = selectParticipant;
+    render();
+  }
+
+  const deleteParticipant = event.target.dataset.deleteParticipant;
+  if (deleteParticipant && state.participants.length > 1) {
+    state.participants = state.participants.filter((participant) => participant.id !== deleteParticipant);
+    if (state.selectedParticipantId === deleteParticipant) state.selectedParticipantId = state.participants[0].id;
     render();
   }
 });
@@ -420,10 +613,28 @@ document.addEventListener('change', (event) => {
   }
 
   if (event.target.dataset.comparison) {
-    state.comparisons[event.target.dataset.comparison] = event.target.type === 'range'
+    const participant = selectedParticipant();
+    participant.comparisons[event.target.dataset.comparison] = event.target.type === 'range'
       ? sliderToSaaty(event.target.value)
       : Number(event.target.value);
+    participant.complete = true;
+    renderParticipants();
     renderWeights();
+    renderGroupWeights();
+    renderRanking();
+    saveState();
+  }
+
+  if (event.target.dataset.participantName) {
+    const participant = state.participants.find((item) => item.id === event.target.dataset.participantName);
+    if (participant) participant.name = event.target.value.trim() || 'Unnamed participant';
+    renderParticipants();
+    renderRanking();
+    saveState();
+  }
+
+  if (event.target.id === 'weightSourceSelect') {
+    state.rankingWeightSource = event.target.value;
     renderRanking();
     saveState();
   }
@@ -432,11 +643,20 @@ document.addEventListener('change', (event) => {
 document.addEventListener('input', (event) => {
   if (event.target.dataset.comparison && event.target.type === 'range') {
     const value = sliderToSaaty(event.target.value);
-    state.comparisons[event.target.dataset.comparison] = value;
+    const participant = selectedParticipant();
+    participant.comparisons[event.target.dataset.comparison] = value;
+    participant.complete = true;
     const current = event.target.closest('.comparison').querySelector('.saaty-current');
     current.textContent = formatSaatyDetail(value, event.target.dataset.left, event.target.dataset.right);
+    renderParticipants();
     renderWeights();
+    renderGroupWeights();
     renderRanking();
+    saveState();
+  }
+
+  if (event.target.id === 'socraticInput') {
+    selectedParticipant().socraticInput = event.target.value;
     saveState();
   }
 });
@@ -467,16 +687,34 @@ document.querySelector('#alternativeForm').addEventListener('submit', (event) =>
 });
 
 document.querySelector('#equalWeightsButton').addEventListener('click', () => {
-  state.comparisons = {};
+  const participant = selectedParticipant();
+  participant.comparisons = {};
+  participant.complete = true;
   render();
 });
 
 document.querySelector('#socraticButton').addEventListener('click', deriveSocraticWeights);
+document.querySelector('#addParticipantButton').addEventListener('click', () => {
+  const participant = createParticipant(`Participant ${state.participants.length + 1}`);
+  state.participants.push(participant);
+  state.selectedParticipantId = participant.id;
+  render();
+});
+document.querySelector('#duplicateParticipantButton').addEventListener('click', () => {
+  const current = selectedParticipant();
+  const participant = createParticipant(`${current.name} copy`, current.comparisons, current.socraticInput);
+  participant.complete = current.complete;
+  state.participants.push(participant);
+  state.selectedParticipantId = participant.id;
+  render();
+});
 document.querySelector('#rankButton').addEventListener('click', renderRanking);
 document.querySelector('#sampleButton').addEventListener('click', () => {
   state.criteria = structuredClone(defaultCriteria);
-  state.comparisons = {};
-  state.manualWeights = equalWeights(state.criteria.filter((criterion) => criterion.active));
+  const participant = createParticipant('Participant 1');
+  state.participants = [participant];
+  state.selectedParticipantId = participant.id;
+  state.rankingWeightSource = 'group';
   state.alternatives = structuredClone(sampleAlternatives);
   render();
 });

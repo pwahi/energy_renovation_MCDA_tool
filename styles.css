@@ -402,6 +402,76 @@ td input {
   gap: 16px;
 }
 
+.participant-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.participant-list {
+  display: grid;
+  gap: 10px;
+}
+
+.participant-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: var(--border-std);
+  border-left: 3px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px;
+}
+
+.participant-card.active {
+  border-left-color: var(--color-amber);
+  background: var(--color-linen);
+}
+
+.participant-select {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+}
+
+.participant-select:hover {
+  background: transparent;
+  color: var(--color-cobalt);
+}
+
+.participant-select span {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.participant-tools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.participant-tools input,
+.ranking-controls select {
+  border: var(--border-std);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-ink);
+  padding: 8px 12px;
+}
+
+.participant-tools input {
+  width: 170px;
+}
+
 .comparison-list {
   display: grid;
   gap: 10px;
@@ -575,6 +645,18 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 1rem;
 }
 
+.ranking-controls {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.compact-label {
+  font-size: 12px;
+}
+
 .rank-bar {
   display: grid;
   grid-template-columns: 12rem 1fr 4rem;
@@ -626,7 +708,8 @@ input[type="range"]::-moz-range-thumb {
 @media (max-width: 860px) {
   .topbar,
   .section-head,
-  .split {
+  .split,
+  .participant-panel {
     display: block;
   }
 
