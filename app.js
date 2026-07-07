@@ -1362,6 +1362,15 @@ function renderProximityMap(data) {
       </g>
     `;
   }).join('');
+  const rankKey = [...data].sort((a, b) => a.rank - b.rank).map((item) => {
+    const isTop = topThree(item);
+    return `
+      <div class="rank-key-item">
+        <span class="rank-key-number ${isTop ? 'top-ranked' : ''}">${item.rank}</span>
+        <span class="rank-key-name">${escapeHtml(item.name)}</span>
+      </div>
+    `;
+  }).join('');
 
   return `
     <section class="chart-card proximity-card">
@@ -1385,6 +1394,9 @@ function renderProximityMap(data) {
           </g>
           ${points}
         </svg>
+        <div class="rank-key" aria-label="Rank key">
+          ${rankKey}
+        </div>
       </div>
     </section>
   `;
