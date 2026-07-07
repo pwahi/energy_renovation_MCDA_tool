@@ -19,19 +19,19 @@ const RI = {
 };
 
 const defaultCriteria = [
-  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmark: 50 },
-  { id: 'C2', name: 'Energy label', unit: 'score', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: null },
-  { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false, benchmark: null },
-  { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: null },
-  { id: 'C5', name: 'Gas savings', unit: 'm3/yr', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: null },
-  { id: 'C6', name: 'Investment costs', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: null },
-  { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false, benchmark: null },
-  { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: null },
-  { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: null },
-  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmark: 100 },
-  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmark: null },
-  { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmark: null },
-  { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmark: null },
+  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmark: 'Lower than existing HT supply' },
+  { id: 'C2', name: 'Energy label', unit: 'label', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: 'Label B or better' },
+  { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false, benchmark: '≤ 1,40' },
+  { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: '> 0' },
+  { id: 'C5', name: 'Gas savings', unit: 'm3/yr', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: '> 0' },
+  { id: 'C6', name: 'Investment costs', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: '' },
+  { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false, benchmark: '<€7.000' },
+  { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: '' },
+  { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: '<20 years' },
+  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmark: 'Lower than existing HT supply' },
+  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmark: '' },
+  { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmark: '' },
+  { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmark: '<€26,50' },
 ];
 
 function createId(prefix = 'id') {
@@ -105,12 +105,10 @@ function normalizeCriteria(criteria) {
   const defaults = new Map(defaultCriteria.map((criterion) => [criterion.id, criterion]));
   return criteria.map((criterion) => {
     const defaultCriterion = defaults.get(criterion.id);
-    const benchmark = criterion.benchmark === '' || criterion.benchmark === undefined
-      ? defaultCriterion?.benchmark ?? null
-      : criterion.benchmark;
+    const benchmark = criterion.benchmark === undefined ? defaultCriterion?.benchmark ?? '' : criterion.benchmark;
     return {
       ...criterion,
-      benchmark: Number.isFinite(Number(benchmark)) ? Number(benchmark) : null,
+      benchmark: String(benchmark ?? ''),
     };
   });
 }
@@ -166,6 +164,74 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+const ENERGY_LABEL_SCORES = {
+  'A++': 9,
+  'A+': 8,
+  A: 7,
+  B: 6,
+  C: 5,
+  D: 4,
+  E: 3,
+  F: 2,
+  G: 1,
+};
+
+function normalizeNumberText(value) {
+  return String(value ?? '')
+    .replace(/[€\sA-Za-z/%]/g, '')
+    .replace(/\.(?=\d{3}(\D|$))/g, '')
+    .replace(',', '.');
+}
+
+function parseNumericValue(value) {
+  const normalized = normalizeNumberText(value);
+  const match = normalized.match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : NaN;
+}
+
+function parseEnergyLabel(value) {
+  const match = String(value ?? '').toUpperCase().match(/A\+\+|A\+|\b[A-G]\b/);
+  return match ? ENERGY_LABEL_SCORES[match[0]] : NaN;
+}
+
+function scoreValueForCriterion(score, criterion) {
+  if (criterion.id === 'C2' || /label/i.test(criterion.name)) {
+    const labelScore = parseEnergyLabel(score);
+    if (Number.isFinite(labelScore)) return labelScore;
+  }
+  return parseNumericValue(score);
+}
+
+function evaluateBenchmark(score, criterion) {
+  const rawBenchmark = String(criterion.benchmark ?? '').trim();
+  if (!rawBenchmark || rawBenchmark === '-') return { evaluable: false, passes: true, reason: 'No benchmark set' };
+
+  if (criterion.id === 'C2' || /label/i.test(criterion.name)) {
+    const scoreLabel = parseEnergyLabel(score);
+    const benchmarkLabel = parseEnergyLabel(rawBenchmark);
+    if (Number.isFinite(scoreLabel) && Number.isFinite(benchmarkLabel)) {
+      return { evaluable: true, passes: scoreLabel >= benchmarkLabel, reason: rawBenchmark };
+    }
+  }
+
+  const scoreValue = scoreValueForCriterion(score, criterion);
+  const benchmarkValue = parseNumericValue(rawBenchmark);
+  if (Number.isFinite(scoreValue) && Number.isFinite(benchmarkValue)) {
+    const operator = rawBenchmark.includes('≤') || rawBenchmark.includes('<=') ? '<='
+      : rawBenchmark.includes('≥') || rawBenchmark.includes('>=') ? '>='
+        : rawBenchmark.includes('<') ? '<'
+          : rawBenchmark.includes('>') ? '>'
+            : criterion.direction === 'max' ? '>=' : '<=';
+    const passes = operator === '<=' ? scoreValue <= benchmarkValue
+      : operator === '<' ? scoreValue < benchmarkValue
+        : operator === '>=' ? scoreValue >= benchmarkValue
+          : scoreValue > benchmarkValue;
+    return { evaluable: true, passes, reason: rawBenchmark };
+  }
+
+  return { evaluable: false, passes: true, reason: rawBenchmark };
+}
+
 function render() {
   renderCriteria();
   renderScores();
@@ -198,8 +264,8 @@ function renderCriteria() {
               <h4>${escapeHtml(criterion.id)} ${escapeHtml(criterion.name)}</h4>
               <p class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'} ${criterion.mandatory ? '| mandatory gate' : ''}</p>
               <label class="benchmark-field">
-                Benchmark ${criterion.direction === 'min' ? '(score <= value)' : '(score >= value)'}
-                <input type="number" step="any" data-benchmark="${criterion.id}" value="${criterion.benchmark ?? ''}" placeholder="Not set" />
+                Benchmark rule
+                <input data-benchmark="${criterion.id}" value="${escapeHtml(criterion.benchmark ?? '')}" placeholder="e.g. Label B or better" />
               </label>
             </div>
             <div class="criterion-tools">
@@ -230,7 +296,7 @@ function renderScores() {
           <td>${alternative.level}</td>
           ${criteria.map((criterion) => `
             <td>
-              <input type="number" step="any" data-score-alt="${alternative.id}" data-score-criterion="${criterion.id}" value="${alternative.scores[criterion.id] ?? ''}" />
+              <input data-score-alt="${alternative.id}" data-score-criterion="${criterion.id}" value="${escapeHtml(alternative.scores[criterion.id] ?? '')}" />
               <div class="meta">${criterion.unit}</div>
             </td>
           `).join('')}
@@ -433,10 +499,8 @@ function renderWeights() {
 
 function benchmarkFailureDetails(alternative) {
   return activeCriteria().filter((criterion) => {
-    if (!Number.isFinite(Number(criterion.benchmark))) return false;
-    const score = Number(alternative.scores[criterion.id]);
-    if (!Number.isFinite(score)) return false;
-    return criterion.direction === 'max' ? score < Number(criterion.benchmark) : score > Number(criterion.benchmark);
+    const result = evaluateBenchmark(alternative.scores[criterion.id], criterion);
+    return result.evaluable && !result.passes;
   });
 }
 
@@ -467,15 +531,15 @@ function calculateTopsis() {
   const criteria = activeCriteria();
   const alternatives = state.alternatives.filter((alternative) => {
     return (!state.excludeBenchmarkFailures || !hasBenchmarkFailure(alternative))
-      && criteria.every((criterion) => Number.isFinite(Number(alternative.scores[criterion.id])));
+      && criteria.every((criterion) => Number.isFinite(scoreValueForCriterion(alternative.scores[criterion.id], criterion)));
   });
   if (!criteria.length || !alternatives.length) return [];
 
   const weights = rankingWeightContext().weights;
-  const columns = criteria.map((criterion) => alternatives.map((alternative) => Number(alternative.scores[criterion.id])));
+  const columns = criteria.map((criterion) => alternatives.map((alternative) => scoreValueForCriterion(alternative.scores[criterion.id], criterion)));
   const denominators = columns.map((column) => Math.sqrt(column.reduce((sum, value) => sum + value ** 2, 0)) || 1);
   const weighted = alternatives.map((alternative) => criteria.map((criterion, index) => {
-    return (Number(alternative.scores[criterion.id]) / denominators[index]) * (weights[criterion.id] ?? 0);
+    return (scoreValueForCriterion(alternative.scores[criterion.id], criterion) / denominators[index]) * (weights[criterion.id] ?? 0);
   }));
 
   const idealPositive = criteria.map((criterion, index) => {
@@ -645,15 +709,14 @@ document.addEventListener('change', (event) => {
   if (event.target.dataset.benchmark) {
     const criterion = state.criteria.find((item) => item.id === event.target.dataset.benchmark);
     if (criterion) {
-      const value = Number(event.target.value);
-      criterion.benchmark = Number.isFinite(value) && event.target.value !== '' ? value : null;
+      criterion.benchmark = event.target.value.trim();
     }
     render();
   }
 
   if (event.target.dataset.scoreAlt) {
     const alternative = state.alternatives.find((item) => item.id === event.target.dataset.scoreAlt);
-    if (alternative) alternative.scores[event.target.dataset.scoreCriterion] = Number(event.target.value);
+    if (alternative) alternative.scores[event.target.dataset.scoreCriterion] = event.target.value;
     render();
   }
 
@@ -722,7 +785,7 @@ document.querySelector('#criterionForm').addEventListener('submit', (event) => {
     unit: data.get('unit'),
     pillar: data.get('pillar'),
     direction: data.get('direction'),
-    benchmark: Number.isFinite(Number(data.get('benchmark'))) && data.get('benchmark') !== '' ? Number(data.get('benchmark')) : null,
+    benchmark: String(data.get('benchmark') || '').trim(),
     mandatory: false,
     active: true,
   });

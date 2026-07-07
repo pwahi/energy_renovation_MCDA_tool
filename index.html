@@ -31,11 +31,12 @@
           <div>
             <h2>KPI library and criteria</h2>
             <p>Use the thesis KPIs as the criteria list, grouped and color-coded by Environmental, Economic, and Social category. C1 and C10 are mandatory LTH readiness gates.</p>
+            <p class="meta">Benchmarks can be numeric or text rules, for example: <code>≤ 1,40</code>, <code>> 0</code>, <code><€7.000</code>, <code>Label B or better</code>, or <code>Lower than existing HT supply</code>.</p>
           </div>
           <form id="criterionForm" class="inline-form">
             <input name="name" placeholder="Custom KPI name" required />
             <input name="unit" placeholder="Unit" required />
-            <input name="benchmark" type="number" step="any" placeholder="Benchmark" />
+            <input name="benchmark" placeholder="Benchmark, e.g. Label B or better" />
             <select name="pillar" required>
               <option>Environmental</option>
               <option>Economic</option>
