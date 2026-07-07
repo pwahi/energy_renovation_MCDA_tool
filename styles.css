@@ -564,6 +564,19 @@ td input {
   margin-bottom: 24px;
 }
 
+.cr-threshold-control {
+  display: grid;
+  gap: 6px;
+  min-width: 260px;
+  max-width: 360px;
+  color: var(--color-slate);
+  font-size: 12px;
+}
+
+.cr-threshold-control strong {
+  color: var(--color-cobalt);
+}
+
 .audit-section {
   margin-top: 20px;
 }

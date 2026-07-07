@@ -97,6 +97,7 @@ function loadState() {
     selectedParticipantId: null,
     rankingWeightSource: 'group',
     excludeBenchmarkFailures: true,
+    crThreshold: 0.1,
   });
 }
 
@@ -127,7 +128,18 @@ function normalizeState(candidate) {
     selectedParticipantId,
     rankingWeightSource: candidate.rankingWeightSource || 'group',
     excludeBenchmarkFailures: candidate.excludeBenchmarkFailures !== false,
+    crThreshold: normalizeCrThreshold(candidate.crThreshold),
   };
+}
+
+function normalizeCrThreshold(value) {
+  const threshold = Number(value);
+  if (!Number.isFinite(threshold)) return 0.1;
+  return Math.max(0.1, Math.min(0.4, threshold));
+}
+
+function crThreshold() {
+  return normalizeCrThreshold(state.crThreshold);
 }
 
 function normalizeAlternatives(alternatives, criterionIdMap = {}) {
@@ -566,7 +578,16 @@ function render() {
   renderWeights();
   renderGroupWeights();
   renderRanking();
+  renderCrThreshold();
   saveState();
+}
+
+function renderCrThreshold() {
+  const slider = document.querySelector('#crThresholdSlider');
+  const label = document.querySelector('#crThresholdValue');
+  const threshold = crThreshold();
+  if (slider && Number(slider.value) !== threshold) slider.value = threshold.toFixed(2);
+  if (label) label.textContent = threshold.toFixed(2);
 }
 
 function renderAlternativeForm() {
@@ -946,7 +967,7 @@ function computeAHP(matrix, criteria) {
   const ri = RI[n] ?? NaN;
   const cr = Number.isFinite(ri) && ri > 0 ? ci / ri : 0;
   const weights = Object.fromEntries(criteria.map((criterion, index) => [criterion.id, vector[index]]));
-  return { weights, cr, lambdaMax, ci, ri, consistent: cr <= 0.1, consistencyVector };
+  return { weights, cr, lambdaMax, ci, ri, consistent: cr <= crThreshold(), consistencyVector };
 }
 
 function normalizeWeights(weights, criteria = activeCriteria()) {
@@ -1028,12 +1049,12 @@ function renderParticipants() {
 
 function formatCrStatus(cr) {
   if (!Number.isFinite(cr)) return 'n/a';
-  return `${cr.toFixed(3)} ${cr <= 0.1 ? 'OK' : 'review'}`;
+  return `${cr.toFixed(3)} ${cr <= crThreshold() ? 'OK' : 'review'}`;
 }
 
 function inconsistencyPrompt(category, result) {
   if (!Number.isFinite(result.cr)) return 'Complete the comparisons to calculate CR.';
-  if (result.cr <= 0.1) return 'CR is acceptable. The judgements in this category are consistent enough to include.';
+  if (result.cr <= crThreshold()) return `CR is within the selected threshold (${crThreshold().toFixed(2)}). The judgements in this category are consistent enough to include.`;
   const deviations = result.consistencyVector.map((value) => Math.abs(value - result.lambdaMax));
   const worstIndex = deviations.indexOf(Math.max(...deviations));
   const criterion = category.criteria[worstIndex];
@@ -1048,7 +1069,7 @@ function renderGroupWeights() {
   const group = aggregateGroupWeights();
   summary.innerHTML = `
     <p class="meta">${group.included.length} participant${group.included.length === 1 ? '' : 's'} included - ${group.excludedCount} not included</p>
-    <p class="meta">Included means every category has CR <= 0.10. Aggregation uses arithmetic mean per criterion, then one global normalization.</p>
+    <p class="meta">Included means every category has CR <= ${crThreshold().toFixed(2)}. Aggregation uses arithmetic mean per criterion, then one global normalization.</p>
   `;
   bars.innerHTML = activeCriteria().map((criterion) => `
     <div class="bar-row">
@@ -1105,7 +1126,7 @@ function renderAHPDialog(participant) {
   body.innerHTML = `
     <div class="helper">
       <strong>How to read CR</strong>
-      <p>CR is the consistency ratio. CR at or below 0.10 is acceptable. If CR is above 0.10, the answers conflict with each other and that category should be reviewed before its weights are used.</p>
+      <p>CR is the consistency ratio. CR at or below the selected threshold (${crThreshold().toFixed(2)}) is accepted. If CR is above the threshold, the answers conflict with each other and that category should be reviewed before its weights are used.</p>
     </div>
     ${activeCategories().map((category) => {
     const profile = participantAHPProfile(participant).categoryResults.find((item) => item.category.id === category.id);
@@ -1550,6 +1571,19 @@ document.addEventListener('change', (event) => {
 });
 
 document.addEventListener('input', (event) => {
+  if (event.target.id === 'crThresholdSlider') {
+    state.crThreshold = normalizeCrThreshold(event.target.value);
+    renderParticipants();
+    renderWeights();
+    renderGroupWeights();
+    renderComparisons();
+    renderRanking();
+    renderCrThreshold();
+    const dialog = document.querySelector('#ahpDialog');
+    if (dialog?.open) renderAHPDialog(selectedParticipant());
+    saveState();
+  }
+
   if (event.target.dataset.judgement && event.target.type === 'range') {
     const participant = selectedParticipant();
     participant.judgements ||= {};

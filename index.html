@@ -120,8 +120,13 @@
           <div>
             <h2>Weights</h2>
             <p>Collect pairwise judgements within each category for each participant, then combine consistent participant weights for TOPSIS.</p>
-            <p class="meta">CR means consistency ratio. CR ≤ 0.10 is acceptable; CR > 0.10 means the participant should review that category's pairwise judgements.</p>
+            <p class="meta">CR means consistency ratio. Lower CR means the pairwise answers are more logically consistent. Use the threshold slider to decide how strict the workshop should be.</p>
           </div>
+          <label class="cr-threshold-control">
+            <span>Accepted CR threshold: <strong id="crThresholdValue">0.10</strong></span>
+            <input id="crThresholdSlider" type="range" min="0.10" max="0.40" step="0.01" value="0.10" />
+            <span class="meta">0.10 is strict; values closer to 0.40 are more permissive and should be used only when stakeholder judgement is difficult to make fully consistent.</span>
+          </label>
           <div class="actions">
             <button id="addParticipantButton" class="ghost" type="button">Add participant</button>
             <button id="duplicateParticipantButton" class="ghost" type="button">Duplicate</button>
