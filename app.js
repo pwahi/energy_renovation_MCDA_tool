@@ -354,11 +354,17 @@ function parseEnergyLabel(value) {
 }
 
 function scoreValueForCriterion(score, criterion) {
-  if (criterion.id === 'C2' || /label/i.test(criterion.name)) {
+  if (isEnergyLabelCriterion(criterion)) {
     const labelScore = parseEnergyLabel(score);
     if (Number.isFinite(labelScore)) return labelScore;
   }
   return parseNumericValue(score);
+}
+
+function isEnergyLabelCriterion(criterion) {
+  return criterion.id === 'C2'
+    || criterion.benchmarkType === 'energy-label'
+    || /label/i.test(`${criterion.name} ${criterion.unit}`);
 }
 
 function baseAlternative() {
@@ -470,7 +476,7 @@ function renderAlternativeForm() {
 }
 
 function alternativeScorePlaceholder(criterion) {
-  if (criterion.id === 'C2' || /label/i.test(criterion.name)) return 'e.g. B, A, A++';
+  if (isEnergyLabelCriterion(criterion)) return 'e.g. B, A, A++';
   if (criterion.unit) return `Enter ${criterion.unit}`;
   return 'Enter performance value';
 }
