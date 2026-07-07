@@ -1058,7 +1058,32 @@ function inconsistencyPrompt(category, result) {
   const deviations = result.consistencyVector.map((value) => Math.abs(value - result.lambdaMax));
   const worstIndex = deviations.indexOf(Math.max(...deviations));
   const criterion = category.criteria[worstIndex];
-  return `${criterion?.id || 'This criterion'} ${criterion?.name || ''} is driving the inconsistency most. Revisit comparisons involving this criterion.`;
+  const mismatch = strongestMismatchForCriterion(category, result, criterion);
+  return `${criterion?.id || 'This criterion'} ${criterion?.name || ''} is driving the inconsistency most. ${mismatch}`;
+}
+
+function strongestMismatchForCriterion(category, result, criterion) {
+  if (!criterion) return 'Revisit comparisons involving this criterion.';
+  let best = null;
+  for (const other of category.criteria) {
+    if (other.id === criterion.id) continue;
+    const [left, right] = category.criteria.findIndex((item) => item.id === criterion.id) < category.criteria.findIndex((item) => item.id === other.id)
+      ? [criterion, other]
+      : [other, criterion];
+    const direct = POSITION_TO_SCORE[clampPosition(selectedParticipant().judgements?.[judgementKey(category.id, left.id, right.id)])];
+    const implied = (result.weights[left.id] || 0.000001) / (result.weights[right.id] || 0.000001);
+    const delta = Math.abs(Math.log(direct) - Math.log(implied));
+    if (!best || delta > best.delta) best = { left, right, direct, implied, delta };
+  }
+  if (!best) return 'Revisit comparisons involving this criterion.';
+  return `Largest mismatch: you answered ${formatRatioPlain(best.direct, best.left.id, best.right.id)}, but the calculated weights imply about ${formatRatioPlain(best.implied, best.left.id, best.right.id)}. Revisit this comparison and other comparisons involving ${criterion.id}.`;
+}
+
+function formatRatioPlain(ratio, leftId, rightId) {
+  if (!Number.isFinite(ratio) || ratio <= 0) return `${leftId} and ${rightId} cannot be compared`;
+  if (Math.abs(ratio - 1) < 0.15) return `${leftId} and ${rightId} are roughly equal`;
+  if (ratio > 1) return `${leftId} is ${ratio.toFixed(1)}x more important than ${rightId}`;
+  return `${rightId} is ${(1 / ratio).toFixed(1)}x more important than ${leftId}`;
 }
 
 function renderGroupWeights() {
