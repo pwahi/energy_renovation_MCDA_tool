@@ -34,10 +34,17 @@ const defaultCriteria = [
   { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false },
 ];
 
+function createId(prefix = 'id') {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 const sampleAlternatives = [
-  { id: crypto.randomUUID(), name: 'Basic insulation package', level: 'Basic', scores: { C1: 70, C2: 3, C4: 15, C5: 420, C6: 18000, C8: 62000, C9: 17, C10: 120, C12: 620 } },
-  { id: crypto.randomUUID(), name: 'Moderate envelope upgrade', level: 'Moderate', scores: { C1: 48, C2: 5, C4: 32, C5: 720, C6: 36000, C8: 76000, C9: 15, C10: 72, C12: 980 } },
-  { id: crypto.randomUUID(), name: 'Deep retrofit ready', level: 'Deep', scores: { C1: 32, C2: 7, C4: 58, C5: 1080, C6: 64000, C8: 91000, C9: 19, C10: 28, C12: 1410 } },
+  { id: createId('alternative'), name: 'Basic insulation package', level: 'Basic', scores: { C1: 70, C2: 3, C4: 15, C5: 420, C6: 18000, C8: 62000, C9: 17, C10: 120, C12: 620 } },
+  { id: createId('alternative'), name: 'Moderate envelope upgrade', level: 'Moderate', scores: { C1: 48, C2: 5, C4: 32, C5: 720, C6: 36000, C8: 76000, C9: 15, C10: 72, C12: 980 } },
+  { id: createId('alternative'), name: 'Deep retrofit ready', level: 'Deep', scores: { C1: 32, C2: 7, C4: 58, C5: 1080, C6: 64000, C8: 91000, C9: 19, C10: 28, C12: 1410 } },
 ];
 
 let state = loadState();
@@ -94,7 +101,7 @@ function normalizeState(candidate) {
 
 function createParticipant(name, comparisons = {}, socraticInput = '') {
   return {
-    id: crypto.randomUUID(),
+    id: createId('participant'),
     name,
     comparisons: structuredClone(comparisons),
     socraticInput,
@@ -104,7 +111,7 @@ function createParticipant(name, comparisons = {}, socraticInput = '') {
 
 function normalizeParticipant(participant, index) {
   return {
-    id: participant.id || crypto.randomUUID(),
+    id: participant.id || createId('participant'),
     name: participant.name || `Participant ${index + 1}`,
     comparisons: participant.comparisons && typeof participant.comparisons === 'object' ? participant.comparisons : {},
     socraticInput: participant.socraticInput || '',
@@ -407,7 +414,7 @@ function renderWeights() {
 function gateFailure(alternative) {
   const c1 = Number(alternative.scores.C1);
   const c10 = Number(alternative.scores.C10);
-  return Number.isFinite(c1) && Number.isFinite(c10) && (c1 > 50 || c10 > 100);
+  return (Number.isFinite(c1) && c1 > 50) || (Number.isFinite(c10) && c10 > 100);
 }
 
 function rankingWeightContext() {
@@ -477,7 +484,7 @@ function renderRanking() {
   chart.innerHTML = results.length
     ? results.map((result, index) => `
       <div class="rank-bar">
-        <div class="rank-name">${index + 1}. ${result.alternative.name}</div>
+        <div class="rank-name">${index + 1}. ${escapeHtml(result.alternative.name)}</div>
         <div class="rank-track">
           <div class="rank-fill" style="width:${Math.max(3, result.closeness * 100)}%"></div>
         </div>
@@ -493,8 +500,8 @@ function renderRanking() {
       ${results.map((result, index) => `
         <tr>
           <td>${index + 1}</td>
-          <td>${result.alternative.name}</td>
-          <td>${result.alternative.level}</td>
+          <td>${escapeHtml(result.alternative.name)}</td>
+          <td>${escapeHtml(result.alternative.level)}</td>
           <td>${result.dPlus.toFixed(4)}</td>
           <td>${result.dMinus.toFixed(4)}</td>
           <td><strong>${result.closeness.toFixed(4)}</strong></td>
@@ -505,7 +512,7 @@ function renderRanking() {
 
   const warnings = state.alternatives.filter(gateFailure);
   document.querySelector('#gateWarnings').innerHTML = warnings.length
-    ? `<div class="warning">LTH gate exclusion: ${warnings.map((warning) => warning.name).join(', ')} failed C1/C10 thresholds and were excluded before TOPSIS.</div>`
+    ? `<div class="warning">LTH gate exclusion: ${warnings.map((warning) => escapeHtml(warning.name)).join(', ')} failed C1/C10 thresholds and were excluded before TOPSIS.</div>`
     : '';
 }
 
@@ -681,7 +688,7 @@ document.querySelector('#criterionForm').addEventListener('submit', (event) => {
 document.querySelector('#alternativeForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  state.alternatives.push({ id: crypto.randomUUID(), name: data.get('name'), level: data.get('level'), scores: {} });
+  state.alternatives.push({ id: createId('alternative'), name: data.get('name'), level: data.get('level'), scores: {} });
   event.currentTarget.reset();
   render();
 });
