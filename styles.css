@@ -318,6 +318,26 @@ td input,
   margin-bottom: 0;
 }
 
+.benchmark-field {
+  display: grid;
+  gap: 4px;
+  max-width: 230px;
+  margin-top: 8px;
+  color: var(--color-slate);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.benchmark-field input {
+  border: var(--border-std);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-ink);
+  padding: 6px 8px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 .criterion-tools {
   display: flex;
   gap: 10px;
@@ -664,6 +684,11 @@ input[type="range"]::-moz-range-thumb {
   align-items: center;
 }
 
+.rank-bar.benchmark-fail {
+  border-left: 3px solid var(--status-fail-text);
+  padding-left: 10px;
+}
+
 .rank-name {
   color: var(--color-ink);
   font-size: 13px;
@@ -695,6 +720,10 @@ input[type="range"]::-moz-range-thumb {
   color: var(--color-cobalt);
   font-weight: 600;
   text-align: right;
+}
+
+.benchmark-fail-row {
+  background: var(--status-fail-bg);
 }
 
 .good {

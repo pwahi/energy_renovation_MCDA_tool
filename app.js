@@ -19,19 +19,19 @@ const RI = {
 };
 
 const defaultCriteria = [
-  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true },
-  { id: 'C2', name: 'Energy label', unit: 'score', pillar: 'Environmental', direction: 'max', mandatory: false, active: true },
-  { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false },
-  { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true },
-  { id: 'C5', name: 'Gas savings', unit: 'm3/yr', pillar: 'Environmental', direction: 'max', mandatory: false, active: true },
-  { id: 'C6', name: 'Investment costs', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true },
-  { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false },
-  { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true },
-  { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true },
-  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true },
-  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false },
-  { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true },
-  { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false },
+  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmark: 50 },
+  { id: 'C2', name: 'Energy label', unit: 'score', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: null },
+  { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false, benchmark: null },
+  { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: null },
+  { id: 'C5', name: 'Gas savings', unit: 'm3/yr', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: null },
+  { id: 'C6', name: 'Investment costs', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: null },
+  { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false, benchmark: null },
+  { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: null },
+  { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: null },
+  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmark: 100 },
+  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmark: null },
+  { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmark: null },
+  { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmark: null },
 ];
 
 function createId(prefix = 'id') {
@@ -73,6 +73,7 @@ function loadState() {
     participants: [createParticipant('Participant 1')],
     selectedParticipantId: null,
     rankingWeightSource: 'group',
+    excludeBenchmarkFailures: true,
   });
 }
 
@@ -81,7 +82,7 @@ function saveState() {
 }
 
 function normalizeState(candidate) {
-  const criteria = Array.isArray(candidate.criteria) ? candidate.criteria : structuredClone(defaultCriteria);
+  const criteria = normalizeCriteria(Array.isArray(candidate.criteria) ? candidate.criteria : structuredClone(defaultCriteria));
   const legacyComparisons = candidate.comparisons && typeof candidate.comparisons === 'object' ? candidate.comparisons : {};
   const participants = Array.isArray(candidate.participants) && candidate.participants.length
     ? candidate.participants.map((participant, index) => normalizeParticipant(participant, index))
@@ -96,7 +97,22 @@ function normalizeState(candidate) {
     participants,
     selectedParticipantId,
     rankingWeightSource: candidate.rankingWeightSource || 'group',
+    excludeBenchmarkFailures: candidate.excludeBenchmarkFailures !== false,
   };
+}
+
+function normalizeCriteria(criteria) {
+  const defaults = new Map(defaultCriteria.map((criterion) => [criterion.id, criterion]));
+  return criteria.map((criterion) => {
+    const defaultCriterion = defaults.get(criterion.id);
+    const benchmark = criterion.benchmark === '' || criterion.benchmark === undefined
+      ? defaultCriterion?.benchmark ?? null
+      : criterion.benchmark;
+    return {
+      ...criterion,
+      benchmark: Number.isFinite(Number(benchmark)) ? Number(benchmark) : null,
+    };
+  });
 }
 
 function createParticipant(name, comparisons = {}, socraticInput = '') {
@@ -179,8 +195,12 @@ function renderCriteria() {
         ${criteria.map((criterion) => `
           <article class="criterion-row ${criterion.pillar.toLowerCase()}">
             <div>
-              <h4>${criterion.id} ${criterion.name}</h4>
-              <p class="meta">${criterion.unit} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'} ${criterion.mandatory ? '| mandatory gate' : ''}</p>
+              <h4>${escapeHtml(criterion.id)} ${escapeHtml(criterion.name)}</h4>
+              <p class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'} ${criterion.mandatory ? '| mandatory gate' : ''}</p>
+              <label class="benchmark-field">
+                Benchmark ${criterion.direction === 'min' ? '(score <= value)' : '(score >= value)'}
+                <input type="number" step="any" data-benchmark="${criterion.id}" value="${criterion.benchmark ?? ''}" placeholder="Not set" />
+              </label>
             </div>
             <div class="criterion-tools">
               <label class="switch">
@@ -411,10 +431,17 @@ function renderWeights() {
   }
 }
 
-function gateFailure(alternative) {
-  const c1 = Number(alternative.scores.C1);
-  const c10 = Number(alternative.scores.C10);
-  return (Number.isFinite(c1) && c1 > 50) || (Number.isFinite(c10) && c10 > 100);
+function benchmarkFailureDetails(alternative) {
+  return activeCriteria().filter((criterion) => {
+    if (!Number.isFinite(Number(criterion.benchmark))) return false;
+    const score = Number(alternative.scores[criterion.id]);
+    if (!Number.isFinite(score)) return false;
+    return criterion.direction === 'max' ? score < Number(criterion.benchmark) : score > Number(criterion.benchmark);
+  });
+}
+
+function hasBenchmarkFailure(alternative) {
+  return benchmarkFailureDetails(alternative).length > 0;
 }
 
 function rankingWeightContext() {
@@ -439,7 +466,8 @@ function rankingWeightContext() {
 function calculateTopsis() {
   const criteria = activeCriteria();
   const alternatives = state.alternatives.filter((alternative) => {
-    return !gateFailure(alternative) && criteria.every((criterion) => Number.isFinite(Number(alternative.scores[criterion.id])));
+    return (!state.excludeBenchmarkFailures || !hasBenchmarkFailure(alternative))
+      && criteria.every((criterion) => Number.isFinite(Number(alternative.scores[criterion.id])));
   });
   if (!criteria.length || !alternatives.length) return [];
 
@@ -464,7 +492,7 @@ function calculateTopsis() {
     const dPlus = Math.sqrt(row.reduce((sum, value, index) => sum + (value - idealPositive[index]) ** 2, 0));
     const dMinus = Math.sqrt(row.reduce((sum, value, index) => sum + (value - idealNegative[index]) ** 2, 0));
     const closeness = dPlus + dMinus === 0 ? 0 : dMinus / (dPlus + dMinus);
-    return { alternative, dPlus, dMinus, closeness };
+    return { alternative, dPlus, dMinus, closeness, benchmarkFailures: benchmarkFailureDetails(alternative) };
   }).sort((a, b) => b.closeness - a.closeness);
 }
 
@@ -475,6 +503,10 @@ function renderRanking() {
   const context = rankingWeightContext();
   const sourceSelect = document.querySelector('#weightSourceSelect');
   if (sourceSelect && sourceSelect.value !== state.rankingWeightSource) sourceSelect.value = state.rankingWeightSource;
+  const benchmarkButton = document.querySelector('#benchmarkModeButton');
+  if (benchmarkButton) {
+    benchmarkButton.textContent = state.excludeBenchmarkFailures ? 'Include benchmark failures' : 'Exclude benchmark failures';
+  }
 
   const notice = document.querySelector('#weightSourceNotice');
   if (notice) {
@@ -483,7 +515,7 @@ function renderRanking() {
 
   chart.innerHTML = results.length
     ? results.map((result, index) => `
-      <div class="rank-bar">
+      <div class="rank-bar ${result.benchmarkFailures.length ? 'benchmark-fail' : ''}">
         <div class="rank-name">${index + 1}. ${escapeHtml(result.alternative.name)}</div>
         <div class="rank-track">
           <div class="rank-fill" style="width:${Math.max(3, result.closeness * 100)}%"></div>
@@ -498,21 +530,24 @@ function renderRanking() {
     </thead>
     <tbody>
       ${results.map((result, index) => `
-        <tr>
+        <tr class="${result.benchmarkFailures.length ? 'benchmark-fail-row' : ''}">
           <td>${index + 1}</td>
           <td>${escapeHtml(result.alternative.name)}</td>
           <td>${escapeHtml(result.alternative.level)}</td>
           <td>${result.dPlus.toFixed(4)}</td>
           <td>${result.dMinus.toFixed(4)}</td>
-          <td><strong>${result.closeness.toFixed(4)}</strong></td>
+          <td><strong>${result.closeness.toFixed(4)}</strong>${result.benchmarkFailures.length ? `<div class="meta bad">Fails: ${result.benchmarkFailures.map((criterion) => escapeHtml(criterion.id)).join(', ')}</div>` : ''}</td>
         </tr>
       `).join('')}
     </tbody>
   `;
 
-  const warnings = state.alternatives.filter(gateFailure);
+  const warnings = state.alternatives.filter(hasBenchmarkFailure);
   document.querySelector('#gateWarnings').innerHTML = warnings.length
-    ? `<div class="warning">LTH gate exclusion: ${warnings.map((warning) => escapeHtml(warning.name)).join(', ')} failed C1/C10 thresholds and were excluded before TOPSIS.</div>`
+    ? `<div class="warning">Benchmark ${state.excludeBenchmarkFailures ? 'exclusion' : 'warning'}: ${warnings.map((warning) => {
+      const failed = benchmarkFailureDetails(warning).map((criterion) => escapeHtml(criterion.id)).join(', ');
+      return `${escapeHtml(warning.name)} (${failed})`;
+    }).join('; ')} ${state.excludeBenchmarkFailures ? 'were excluded before TOPSIS.' : 'are included but marked in the ranking.'}</div>`
     : '';
 }
 
@@ -607,6 +642,15 @@ document.addEventListener('change', (event) => {
     render();
   }
 
+  if (event.target.dataset.benchmark) {
+    const criterion = state.criteria.find((item) => item.id === event.target.dataset.benchmark);
+    if (criterion) {
+      const value = Number(event.target.value);
+      criterion.benchmark = Number.isFinite(value) && event.target.value !== '' ? value : null;
+    }
+    render();
+  }
+
   if (event.target.dataset.scoreAlt) {
     const alternative = state.alternatives.find((item) => item.id === event.target.dataset.scoreAlt);
     if (alternative) alternative.scores[event.target.dataset.scoreCriterion] = Number(event.target.value);
@@ -678,6 +722,7 @@ document.querySelector('#criterionForm').addEventListener('submit', (event) => {
     unit: data.get('unit'),
     pillar: data.get('pillar'),
     direction: data.get('direction'),
+    benchmark: Number.isFinite(Number(data.get('benchmark'))) && data.get('benchmark') !== '' ? Number(data.get('benchmark')) : null,
     mandatory: false,
     active: true,
   });
@@ -716,12 +761,18 @@ document.querySelector('#duplicateParticipantButton').addEventListener('click', 
   render();
 });
 document.querySelector('#rankButton').addEventListener('click', renderRanking);
+document.querySelector('#benchmarkModeButton').addEventListener('click', () => {
+  state.excludeBenchmarkFailures = !state.excludeBenchmarkFailures;
+  renderRanking();
+  saveState();
+});
 document.querySelector('#sampleButton').addEventListener('click', () => {
   state.criteria = structuredClone(defaultCriteria);
   const participant = createParticipant('Participant 1');
   state.participants = [participant];
   state.selectedParticipantId = participant.id;
   state.rankingWeightSource = 'group';
+  state.excludeBenchmarkFailures = true;
   state.alternatives = structuredClone(sampleAlternatives);
   render();
 });
