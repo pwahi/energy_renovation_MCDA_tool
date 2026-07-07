@@ -19,7 +19,7 @@ const RI = {
 };
 
 const defaultCriteria = [
-  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmarkType: 'lower-than-base', benchmarkValue: '' },
+  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmarkType: 'none', benchmarkValue: '', baseComparison: true },
   { id: 'C2', name: 'Energy label', unit: 'label', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'energy-label', benchmarkValue: 'B' },
   { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '1.40' },
   { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'numeric-min-strict', benchmarkValue: '0' },
@@ -28,7 +28,7 @@ const defaultCriteria = [
   { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '7000' },
   { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '' },
   { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'numeric-max', benchmarkValue: '20' },
-  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmarkType: 'lower-than-base', benchmarkValue: '' },
+  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmarkType: 'none', benchmarkValue: '', baseComparison: true },
   { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'none', benchmarkValue: '' },
   { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '' },
   { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '26.50' },
@@ -120,10 +120,21 @@ function normalizeCriteria(criteria) {
   return criteria.map((criterion) => {
     const defaultCriterion = defaults.get(criterion.id);
     const benchmark = benchmarkFromLegacy(criterion, defaultCriterion);
-    return {
+    const legacyBaseComparison = isBaseComparableCriterion(criterion)
+      && ['lower-than-base', 'higher-than-base'].includes(benchmark.benchmarkType);
+    const normalizedBenchmark = legacyBaseComparison
+      ? { ...benchmark, benchmarkType: 'none', benchmarkValue: '' }
+      : benchmark;
+    const normalizedCriterion = {
       ...criterion,
-      ...benchmark,
-      benchmark: benchmarkDisplay({ ...criterion, ...benchmark }),
+      ...normalizedBenchmark,
+      baseComparison: isBaseComparableCriterion(criterion)
+        ? criterion.baseComparison !== false || legacyBaseComparison
+        : false,
+    };
+    return {
+      ...normalizedCriterion,
+      benchmark: benchmarkDisplay(normalizedCriterion),
     };
   });
 }
@@ -159,6 +170,10 @@ function selectedParticipant() {
 
 function activeCriteria() {
   return state.criteria.filter((criterion) => criterion.active);
+}
+
+function isBaseComparableCriterion(criterion) {
+  return ['C1', 'C10'].includes(criterion.id);
 }
 
 function equalWeights(criteria) {
@@ -349,6 +364,21 @@ function evaluateBenchmark(score, criterion, alternative = null) {
   return { evaluable: false, passes: true, reason: benchmarkDisplay(criterion) };
 }
 
+function evaluateBaseComparison(score, criterion, alternative = null) {
+  if (!criterion.baseComparison) return { evaluable: false, passes: true, reason: 'Base comparison not enabled' };
+  const base = baseAlternative();
+  if (!base || alternative?.id === base.id) {
+    return { evaluable: false, passes: true, reason: 'Compare with base case' };
+  }
+  const scoreValue = scoreValueForCriterion(score, criterion);
+  const baseValue = scoreValueForCriterion(base.scores[criterion.id], criterion);
+  if (!Number.isFinite(scoreValue) || !Number.isFinite(baseValue)) {
+    return { evaluable: false, passes: true, reason: 'Compare with base case' };
+  }
+  const passes = criterion.direction === 'max' ? scoreValue > baseValue : scoreValue < baseValue;
+  return { evaluable: true, passes, reason: `Compare with base case: ${base.name}` };
+}
+
 function evaluateLegacyBenchmark(score, criterion, alternative = null) {
   const rawBenchmark = String(criterion.benchmark ?? '').trim();
   if (!rawBenchmark || rawBenchmark === '-') return { evaluable: false, passes: true, reason: 'No benchmark set' };
@@ -386,15 +416,17 @@ function renderCriteria() {
           <article class="criterion-row ${criterion.pillar.toLowerCase()}">
             <div>
               <h4>${escapeHtml(criterion.id)} ${escapeHtml(criterion.name)}</h4>
-              <p class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'} ${criterion.mandatory ? '| mandatory gate' : ''}</p>
+              <p class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'} ${criterion.mandatory ? '| gate' : ''}${criterion.baseComparison ? ' | base comparison' : ''}</p>
               ${renderBenchmarkControls(criterion)}
+              ${renderBaseComparisonControl(criterion)}
             </div>
             <div class="criterion-tools">
               <label class="switch">
                 <input type="checkbox" ${criterion.active ? 'checked' : ''} ${criterion.mandatory ? 'disabled' : ''} data-toggle="${criterion.id}" />
                 Active
               </label>
-              ${criterion.mandatory ? '<span class="pill">Gate</span>' : `<button class="ghost delete" type="button" data-delete="${criterion.id}">Delete</button>`}
+              ${criterion.mandatory ? '<span class="pill">Gate</span>' : ''}
+              <button class="ghost delete" type="button" data-delete="${criterion.id}">Delete</button>
             </div>
           </article>
         `).join('')}
@@ -410,6 +442,16 @@ function renderBenchmarkControls(criterion) {
     <label class="benchmark-field">
       Benchmark
       <input data-benchmark-text="${criterion.id}" value="${escapeHtml(value)}" placeholder="e.g. <= 1.40, Label B or better" />
+    </label>
+  `;
+}
+
+function renderBaseComparisonControl(criterion) {
+  if (!isBaseComparableCriterion(criterion)) return '';
+  return `
+    <label class="switch benchmark-check">
+      <input type="checkbox" ${criterion.baseComparison ? 'checked' : ''} data-base-comparison="${criterion.id}" />
+      Compare with base case
     </label>
   `;
 }
@@ -656,8 +698,9 @@ function renderWeights() {
 
 function benchmarkFailureDetails(alternative) {
   return activeCriteria().filter((criterion) => {
-    const result = evaluateBenchmark(alternative.scores[criterion.id], criterion, alternative);
-    return result.evaluable && !result.passes;
+    const benchmarkResult = evaluateBenchmark(alternative.scores[criterion.id], criterion, alternative);
+    const baseResult = evaluateBaseComparison(alternative.scores[criterion.id], criterion, alternative);
+    return (benchmarkResult.evaluable && !benchmarkResult.passes) || (baseResult.evaluable && !baseResult.passes);
   });
 }
 
@@ -829,7 +872,7 @@ document.addEventListener('click', (event) => {
 
   const deleteCriterion = event.target.dataset.delete;
   if (deleteCriterion) {
-    state.criteria = state.criteria.filter((criterion) => criterion.id !== deleteCriterion || criterion.mandatory);
+    state.criteria = state.criteria.filter((criterion) => criterion.id !== deleteCriterion);
     for (const alternative of state.alternatives) delete alternative.scores[deleteCriterion];
     for (const participant of state.participants) {
       participant.comparisons = Object.fromEntries(Object.entries(participant.comparisons).filter(([key]) => !key.split('|').includes(deleteCriterion)));
@@ -891,9 +934,23 @@ document.addEventListener('change', (event) => {
         direction: criterion.direction,
         name: criterion.name,
       });
-      criterion.benchmarkType = parsed.benchmarkType;
-      criterion.benchmarkValue = parsed.benchmarkValue;
+      if (isBaseComparableCriterion(criterion) && ['lower-than-base', 'higher-than-base'].includes(parsed.benchmarkType)) {
+        criterion.baseComparison = true;
+        criterion.benchmarkType = 'none';
+        criterion.benchmarkValue = '';
+      } else {
+        criterion.benchmarkType = parsed.benchmarkType;
+        criterion.benchmarkValue = parsed.benchmarkValue;
+      }
       criterion.benchmark = benchmarkDisplay(criterion);
+    }
+    render();
+  }
+
+  if (event.target.dataset.baseComparison) {
+    const criterion = state.criteria.find((item) => item.id === event.target.dataset.baseComparison);
+    if (criterion && isBaseComparableCriterion(criterion)) {
+      criterion.baseComparison = event.target.checked;
     }
     render();
   }
@@ -984,6 +1041,7 @@ document.querySelector('#criterionForm').addEventListener('submit', (event) => {
       benchmarkValue: String(data.get('benchmarkValue') || '').trim(),
     }),
     mandatory: false,
+    baseComparison: false,
     active: true,
   });
   event.currentTarget.reset();

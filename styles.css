@@ -348,6 +348,11 @@ td input,
   font-family: var(--font-mono);
 }
 
+.benchmark-check {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
 .criterion-tools {
   display: flex;
   gap: 10px;
