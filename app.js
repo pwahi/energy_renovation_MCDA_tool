@@ -42,9 +42,10 @@ function createId(prefix = 'id') {
 }
 
 const sampleAlternatives = [
-  { id: createId('alternative'), name: 'Basic insulation package', level: 'Basic', scores: { C1: 70, C2: 3, C4: 15, C5: 420, C6: 18000, C8: 62000, C9: 17, C10: 120, C12: 620 } },
-  { id: createId('alternative'), name: 'Moderate envelope upgrade', level: 'Moderate', scores: { C1: 48, C2: 5, C4: 32, C5: 720, C6: 36000, C8: 76000, C9: 15, C10: 72, C12: 980 } },
-  { id: createId('alternative'), name: 'Deep retrofit ready', level: 'Deep', scores: { C1: 32, C2: 7, C4: 58, C5: 1080, C6: 64000, C8: 91000, C9: 19, C10: 28, C12: 1410 } },
+  { id: createId('alternative'), name: 'Existing HT supply baseline', level: 'Base case', isBaseCase: true, scores: { C1: 80, C2: 'C', C4: 0, C5: 0, C6: 0, C8: 84000, C9: 0, C10: 140, C12: 0 } },
+  { id: createId('alternative'), name: 'Basic insulation package', level: 'Basic', isBaseCase: false, scores: { C1: 70, C2: 'B', C4: 15, C5: 420, C6: 18000, C8: 62000, C9: 17, C10: 120, C12: 620 } },
+  { id: createId('alternative'), name: 'Moderate envelope upgrade', level: 'Moderate', isBaseCase: false, scores: { C1: 48, C2: 'A', C4: 32, C5: 720, C6: 36000, C8: 76000, C9: 15, C10: 72, C12: 980 } },
+  { id: createId('alternative'), name: 'Deep retrofit ready', level: 'Deep', isBaseCase: false, scores: { C1: 32, C2: 'A++', C4: 58, C5: 1080, C6: 64000, C8: 91000, C9: 19, C10: 28, C12: 1410 } },
 ];
 
 let state = loadState();
@@ -93,12 +94,25 @@ function normalizeState(candidate) {
 
   return {
     criteria,
-    alternatives: Array.isArray(candidate.alternatives) ? candidate.alternatives : structuredClone(sampleAlternatives),
+    alternatives: normalizeAlternatives(Array.isArray(candidate.alternatives) ? candidate.alternatives : structuredClone(sampleAlternatives)),
     participants,
     selectedParticipantId,
     rankingWeightSource: candidate.rankingWeightSource || 'group',
     excludeBenchmarkFailures: candidate.excludeBenchmarkFailures !== false,
   };
+}
+
+function normalizeAlternatives(alternatives) {
+  const normalized = alternatives.map((alternative) => ({
+    ...alternative,
+    id: alternative.id || createId('alternative'),
+    isBaseCase: Boolean(alternative.isBaseCase),
+    scores: alternative.scores || {},
+  }));
+  if (!normalized.some((alternative) => alternative.isBaseCase) && normalized.length) {
+    normalized[0].isBaseCase = true;
+  }
+  return normalized;
 }
 
 function normalizeCriteria(criteria) {
@@ -202,9 +216,31 @@ function scoreValueForCriterion(score, criterion) {
   return parseNumericValue(score);
 }
 
-function evaluateBenchmark(score, criterion) {
+function baseAlternative() {
+  return state.alternatives.find((alternative) => alternative.isBaseCase);
+}
+
+function isRelativeBenchmark(benchmark) {
+  return /existing|base|baseline|ht supply/i.test(String(benchmark ?? ''));
+}
+
+function evaluateBenchmark(score, criterion, alternative = null) {
   const rawBenchmark = String(criterion.benchmark ?? '').trim();
   if (!rawBenchmark || rawBenchmark === '-') return { evaluable: false, passes: true, reason: 'No benchmark set' };
+
+  if (isRelativeBenchmark(rawBenchmark)) {
+    const base = baseAlternative();
+    if (!base || alternative?.id === base.id) {
+      return { evaluable: false, passes: true, reason: rawBenchmark };
+    }
+    const scoreValue = scoreValueForCriterion(score, criterion);
+    const baseValue = scoreValueForCriterion(base.scores[criterion.id], criterion);
+    if (Number.isFinite(scoreValue) && Number.isFinite(baseValue)) {
+      const passes = criterion.direction === 'max' ? scoreValue > baseValue : scoreValue < baseValue;
+      return { evaluable: true, passes, reason: `${rawBenchmark}: ${base.name}` };
+    }
+    return { evaluable: false, passes: true, reason: rawBenchmark };
+  }
 
   if (criterion.id === 'C2' || /label/i.test(criterion.name)) {
     const scoreLabel = parseEnergyLabel(score);
@@ -286,21 +322,27 @@ function renderCriteria() {
 function renderScores() {
   const table = document.querySelector('#scoresTable');
   const criteria = activeCriteria();
-  const headers = ['Alternative', 'Level', ...criteria.map((criterion) => `${criterion.id} ${criterion.name}`), ''];
+  const headers = ['Alternative', 'Level', 'Base case', ...criteria.map((criterion) => `${criterion.id} ${criterion.name}`), ''];
   table.innerHTML = `
     <thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead>
     <tbody>
       ${state.alternatives.map((alternative) => `
-        <tr>
+        <tr class="${alternative.isBaseCase ? 'base-case-row' : ''}">
           <td><input data-alt-name="${alternative.id}" value="${alternative.name}" /></td>
           <td>${alternative.level}</td>
+          <td>
+            <label class="switch">
+              <input type="radio" name="baseAlternative" data-base-alt="${alternative.id}" ${alternative.isBaseCase ? 'checked' : ''} />
+              Existing condition
+            </label>
+          </td>
           ${criteria.map((criterion) => `
             <td>
               <input data-score-alt="${alternative.id}" data-score-criterion="${criterion.id}" value="${escapeHtml(alternative.scores[criterion.id] ?? '')}" />
               <div class="meta">${criterion.unit}</div>
             </td>
           `).join('')}
-          <td><button class="ghost delete" type="button" data-delete-alt="${alternative.id}">Delete</button></td>
+          <td><button class="ghost delete" type="button" data-delete-alt="${alternative.id}" ${alternative.isBaseCase ? 'disabled' : ''}>Delete</button></td>
         </tr>
       `).join('')}
     </tbody>
@@ -499,7 +541,7 @@ function renderWeights() {
 
 function benchmarkFailureDetails(alternative) {
   return activeCriteria().filter((criterion) => {
-    const result = evaluateBenchmark(alternative.scores[criterion.id], criterion);
+    const result = evaluateBenchmark(alternative.scores[criterion.id], criterion, alternative);
     return result.evaluable && !result.passes;
   });
 }
@@ -530,7 +572,8 @@ function rankingWeightContext() {
 function calculateTopsis() {
   const criteria = activeCriteria();
   const alternatives = state.alternatives.filter((alternative) => {
-    return (!state.excludeBenchmarkFailures || !hasBenchmarkFailure(alternative))
+    return !alternative.isBaseCase
+      && (!state.excludeBenchmarkFailures || !hasBenchmarkFailure(alternative))
       && criteria.every((criterion) => Number.isFinite(scoreValueForCriterion(alternative.scores[criterion.id], criterion)));
   });
   if (!criteria.length || !alternatives.length) return [];
@@ -606,7 +649,7 @@ function renderRanking() {
     </tbody>
   `;
 
-  const warnings = state.alternatives.filter(hasBenchmarkFailure);
+  const warnings = state.alternatives.filter((alternative) => !alternative.isBaseCase && hasBenchmarkFailure(alternative));
   document.querySelector('#gateWarnings').innerHTML = warnings.length
     ? `<div class="warning">Benchmark ${state.excludeBenchmarkFailures ? 'exclusion' : 'warning'}: ${warnings.map((warning) => {
       const failed = benchmarkFailureDetails(warning).map((criterion) => escapeHtml(criterion.id)).join(', ');
@@ -681,7 +724,7 @@ document.addEventListener('click', (event) => {
 
   const deleteAlternative = event.target.dataset.deleteAlt;
   if (deleteAlternative) {
-    state.alternatives = state.alternatives.filter((alternative) => alternative.id !== deleteAlternative);
+    state.alternatives = state.alternatives.filter((alternative) => alternative.id !== deleteAlternative || alternative.isBaseCase);
     render();
   }
 
@@ -723,6 +766,13 @@ document.addEventListener('change', (event) => {
   if (event.target.dataset.altName) {
     const alternative = state.alternatives.find((item) => item.id === event.target.dataset.altName);
     if (alternative) alternative.name = event.target.value;
+    render();
+  }
+
+  if (event.target.dataset.baseAlt) {
+    state.alternatives.forEach((alternative) => {
+      alternative.isBaseCase = alternative.id === event.target.dataset.baseAlt;
+    });
     render();
   }
 
@@ -796,7 +846,7 @@ document.querySelector('#criterionForm').addEventListener('submit', (event) => {
 document.querySelector('#alternativeForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  state.alternatives.push({ id: createId('alternative'), name: data.get('name'), level: data.get('level'), scores: {} });
+  state.alternatives.push({ id: createId('alternative'), name: data.get('name'), level: data.get('level'), isBaseCase: false, scores: {} });
   event.currentTarget.reset();
   render();
 });

@@ -726,6 +726,10 @@ input[type="range"]::-moz-range-thumb {
   background: var(--status-fail-bg);
 }
 
+.base-case-row {
+  background: var(--color-cobalt-light);
+}
+
 .good {
   color: var(--status-pass-text);
 }
