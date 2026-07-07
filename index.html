@@ -141,19 +141,9 @@
             <div id="groupSummary"></div>
             <div id="groupWeightBars"></div>
           </div>
-        </div>
-
-        <div class="split">
-          <div>
-            <h3>Participant weight audit</h3>
-            <p class="meta">This table shows each participant's normalized weights, the arithmetic average, and the final balanced row used for group ranking.</p>
-            <div class="table-wrap">
-              <table id="participantComparisonTable"></table>
-            </div>
-          </div>
           <aside class="panel">
             <h3>Selected participant</h3>
-            <p class="meta">Use this panel to review or revise the currently selected participant's category-level AHP inputs.</p>
+            <p class="meta">Review or revise the currently selected participant's category-level AHP inputs.</p>
             <button id="editSelectedAhpButton" class="ghost" type="button">Edit selected pairwise</button>
             <div id="weightBars"></div>
             <div id="consistency" class="metric"></div>
@@ -163,9 +153,17 @@
             </div>
             <label class="stacked">
               Selected participant priorities
-              <textarea id="socraticInput" rows="8" placeholder="Describe what matters most in this project: cost, comfort, emissions, nuisance, payback, readiness, or other constraints."></textarea>
+              <textarea id="socraticInput" rows="6" placeholder="Describe what matters most in this project: cost, comfort, emissions, nuisance, payback, readiness, or other constraints."></textarea>
             </label>
           </aside>
+        </div>
+
+        <div class="audit-section">
+          <h3>Participant weight audit</h3>
+          <p class="meta">This table shows each participant's normalized weights, the arithmetic average, and the final balanced row used for group ranking.</p>
+          <div class="table-wrap">
+            <table id="participantComparisonTable"></table>
+          </div>
         </div>
         <dialog id="ahpDialog" class="modal">
           <div class="alternative-form">

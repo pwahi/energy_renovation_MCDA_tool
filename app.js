@@ -1108,8 +1108,8 @@ function renderAHPDialog(participant) {
             <div class="comparison">
               <label>
                 <div class="comparison-top">
-                  <strong>${escapeHtml(left.id)} ${escapeHtml(left.name)}</strong>
-                  <strong>${escapeHtml(right.id)} ${escapeHtml(right.name)}</strong>
+                  <strong class="criterion-chip ${category.name.toLowerCase()}">${escapeHtml(left.id)} ${escapeHtml(left.name)}</strong>
+                  <strong class="criterion-chip ${category.name.toLowerCase()}">${escapeHtml(right.id)} ${escapeHtml(right.name)}</strong>
                 </div>
                 <input type="range" min="1" max="17" step="1" value="${position}" data-judgement="${key}" data-left="${left.id}" data-right="${right.id}" />
                 <div class="saaty-scale" aria-hidden="true">

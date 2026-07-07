@@ -559,9 +559,13 @@ td input {
 
 .participant-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(360px, 1.4fr) minmax(280px, 0.8fr) minmax(320px, 0.9fr);
   gap: 16px;
   margin-bottom: 24px;
+}
+
+.audit-section {
+  margin-top: 20px;
 }
 
 .participant-list {
@@ -682,6 +686,30 @@ td input {
 
 .comparison-top strong {
   font-weight: 500;
+}
+
+.criterion-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  border-left: var(--border-accent-left);
+}
+
+.criterion-chip.environmental {
+  background: var(--pillar-env-bg);
+  color: var(--pillar-env-text);
+}
+
+.criterion-chip.economic {
+  background: var(--pillar-eco-bg);
+  color: var(--pillar-eco-text);
+}
+
+.criterion-chip.social {
+  background: var(--pillar-soc-bg);
+  color: var(--pillar-soc-text);
 }
 
 input[type="range"] {
