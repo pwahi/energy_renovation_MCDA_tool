@@ -189,7 +189,7 @@ main {
 .section-head {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 24px;
   align-items: flex-start;
   padding-top: 1rem;
   margin-bottom: 1rem;
@@ -207,6 +207,24 @@ main {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.section-head > .actions {
+  justify-content: flex-end;
+  max-width: 560px;
+}
+
+.weights-head {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.35fr) minmax(250px, 0.9fr) minmax(300px, 1fr) minmax(310px, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.weights-head > .actions {
+  max-width: none;
+  justify-content: flex-start;
+  gap: 14px;
 }
 
 .inline-form {
@@ -564,17 +582,64 @@ td input {
   margin-bottom: 24px;
 }
 
-.cr-threshold-control {
+.cr-threshold-control,
+.weight-mode-control {
   display: grid;
   gap: 6px;
   min-width: 260px;
-  max-width: 360px;
+  max-width: none;
   color: var(--color-slate);
   font-size: 12px;
 }
 
 .cr-threshold-control strong {
   color: var(--color-cobalt);
+}
+
+.weight-mode-control {
+  min-width: 300px;
+}
+
+.segmented-control {
+  display: inline-flex;
+  width: fit-content;
+  border: var(--border-std);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-white);
+}
+
+.segmented-control .segment {
+  border: 0;
+  border-right: var(--border-std);
+  border-radius: 0;
+  background: var(--color-white);
+  color: var(--color-cobalt);
+  padding: 9px 13px;
+  min-height: 38px;
+}
+
+.segmented-control .segment:last-child {
+  border-right: 0;
+}
+
+.segmented-control .segment.active {
+  background: var(--color-cobalt);
+  color: var(--color-white);
+}
+
+.segmented-control .segment:hover {
+  background: var(--color-cobalt-soft);
+}
+
+.segmented-control .segment.active:hover {
+  background: var(--color-cobalt);
+}
+
+@media (max-width: 1280px) {
+  .weights-head {
+    grid-template-columns: repeat(2, minmax(280px, 1fr));
+  }
 }
 
 .audit-section {
