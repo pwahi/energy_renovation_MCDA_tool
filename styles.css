@@ -632,6 +632,29 @@ td input {
   gap: 10px;
 }
 
+.ahp-dialog-body {
+  display: grid;
+  gap: 14px;
+}
+
+.ahp-category {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: var(--border-std);
+}
+
+.category-headline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.category-headline h4 {
+  margin-bottom: 0;
+}
+
 .comparison {
   background: var(--color-white);
   border: var(--border-std);

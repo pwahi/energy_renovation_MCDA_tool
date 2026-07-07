@@ -18,6 +18,28 @@ const RI = {
   15: 1.59,
 };
 
+const POSITION_TO_SCORE = {
+  1: 9,
+  2: 8,
+  3: 7,
+  4: 6,
+  5: 5,
+  6: 4,
+  7: 3,
+  8: 2,
+  9: 1,
+  10: 1 / 2,
+  11: 1 / 3,
+  12: 1 / 4,
+  13: 1 / 5,
+  14: 1 / 6,
+  15: 1 / 7,
+  16: 1 / 8,
+  17: 1 / 9,
+};
+
+const CATEGORY_ORDER = ['Environmental', 'Economic', 'Social'];
+
 const defaultCriteria = [
   { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmarkType: 'none', benchmarkValue: '', baseComparison: true },
   { id: 'C2', name: 'Energy label', unit: 'label', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'energy-label', benchmarkValue: 'B' },
@@ -92,6 +114,7 @@ function normalizeState(candidate) {
   const normalizedParticipants = participants.map((participant) => ({
     ...participant,
     comparisons: remapComparisons(participant.comparisons, criterionNormalization.idMap),
+    judgements: remapJudgements(participant.judgements || {}, criterionNormalization.idMap),
   }));
   const selectedParticipantId = participants.some((participant) => participant.id === candidate.selectedParticipantId)
     ? candidate.selectedParticipantId
@@ -189,6 +212,14 @@ function remapComparisons(comparisons, idMap = {}) {
   }));
 }
 
+function remapJudgements(judgements, idMap = {}) {
+  return Object.fromEntries(Object.entries(judgements || {}).flatMap(([key, value]) => {
+    const [categoryId, left, right] = key.split('|');
+    if (!categoryId || !left || !right) return [];
+    return [[judgementKey(categoryId, idMap[left] || left, idMap[right] || right), clampPosition(value)]];
+  }));
+}
+
 function normalizeCriteria(criteria) {
   const defaults = new Map(defaultCriteria.map((criterion) => [criterion.id, criterion]));
   return criteria.map((criterion) => {
@@ -218,6 +249,7 @@ function createParticipant(name, comparisons = {}, socraticInput = '') {
     id: createId('participant'),
     name,
     comparisons: structuredClone(comparisons),
+    judgements: legacyComparisonsToJudgements(comparisons),
     socraticInput,
     complete: false,
   };
@@ -228,6 +260,9 @@ function normalizeParticipant(participant, index) {
     id: participant.id || createId('participant'),
     name: participant.name || `Participant ${index + 1}`,
     comparisons: participant.comparisons && typeof participant.comparisons === 'object' ? participant.comparisons : {},
+    judgements: participant.judgements && typeof participant.judgements === 'object'
+      ? participant.judgements
+      : legacyComparisonsToJudgements(participant.comparisons || {}),
     socraticInput: participant.socraticInput || '',
     complete: Boolean(participant.complete),
   };
@@ -257,6 +292,54 @@ function equalWeights(criteria) {
 
 function comparisonKey(leftId, rightId) {
   return `${leftId}|${rightId}`;
+}
+
+function judgementKey(categoryId, leftId, rightId) {
+  return `${categoryId}|${leftId}|${rightId}`;
+}
+
+function categoryIdForPillar(pillar) {
+  return String(pillar || '').trim().toLowerCase().replace(/\s+/g, '-');
+}
+
+function clampPosition(value) {
+  const position = Number(value);
+  if (!Number.isFinite(position)) return 9;
+  return Math.max(1, Math.min(17, Math.round(position)));
+}
+
+function scoreToPosition(score) {
+  const numeric = Number(score);
+  let bestPosition = 9;
+  let bestDelta = Infinity;
+  for (const [position, lookupScore] of Object.entries(POSITION_TO_SCORE)) {
+    const delta = Math.abs(lookupScore - numeric);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestPosition = Number(position);
+    }
+  }
+  return bestPosition;
+}
+
+function activeCategories() {
+  return CATEGORY_ORDER.map((pillar) => ({
+    id: categoryIdForPillar(pillar),
+    name: pillar,
+    criteria: activeCriteria().filter((criterion) => criterion.pillar === pillar),
+  })).filter((category) => category.criteria.length);
+}
+
+function legacyComparisonsToJudgements(comparisons = {}) {
+  const judgements = {};
+  for (const [key, value] of Object.entries(comparisons || {})) {
+    const [leftId, rightId] = key.split('|');
+    const left = defaultCriteria.find((criterion) => criterion.id === leftId);
+    const right = defaultCriteria.find((criterion) => criterion.id === rightId);
+    if (!left || !right || left.pillar !== right.pillar) continue;
+    judgements[judgementKey(categoryIdForPillar(left.pillar), leftId, rightId)] = scoreToPosition(value);
+  }
+  return judgements;
 }
 
 function nextCriterionId() {
@@ -808,6 +891,262 @@ function renderWeights() {
   }
 }
 
+function categoryPairs(criteria) {
+  const pairs = [];
+  for (let i = 0; i < criteria.length; i += 1) {
+    for (let j = i + 1; j < criteria.length; j += 1) pairs.push([criteria[i], criteria[j]]);
+  }
+  return pairs;
+}
+
+function ensureParticipantJudgements(participant) {
+  participant.judgements ||= {};
+  for (const category of activeCategories()) {
+    for (const [left, right] of categoryPairs(category.criteria)) {
+      const key = judgementKey(category.id, left.id, right.id);
+      if (!participant.judgements[key]) participant.judgements[key] = 9;
+    }
+  }
+}
+
+function categoryComplete(participant, category) {
+  if (category.criteria.length <= 1) return true;
+  return categoryPairs(category.criteria).every(([left, right]) => {
+    const position = Number(participant.judgements?.[judgementKey(category.id, left.id, right.id)]);
+    return Number.isInteger(position) && position >= 1 && position <= 17;
+  });
+}
+
+function buildCategoryMatrix(participant, category) {
+  const n = category.criteria.length;
+  const matrix = Array.from({ length: n }, () => Array(n).fill(1));
+  const indexById = new Map(category.criteria.map((criterion, index) => [criterion.id, index]));
+  for (const [left, right] of categoryPairs(category.criteria)) {
+    const position = clampPosition(participant.judgements?.[judgementKey(category.id, left.id, right.id)]);
+    const score = POSITION_TO_SCORE[position];
+    const i = indexById.get(left.id);
+    const j = indexById.get(right.id);
+    matrix[i][j] = score;
+    matrix[j][i] = 1 / score;
+  }
+  return matrix;
+}
+
+function computeAHP(matrix, criteria) {
+  const n = criteria.length;
+  if (!n) return { weights: {}, cr: 0, lambdaMax: 0, ci: 0, consistent: true, consistencyVector: [] };
+  if (n === 1) return { weights: { [criteria[0].id]: 1 }, cr: 0, lambdaMax: 1, ci: 0, consistent: true, consistencyVector: [1] };
+  const colSums = Array.from({ length: n }, (_, column) => matrix.reduce((sum, row) => sum + row[column], 0) || 1);
+  const normalized = matrix.map((row) => row.map((cell, column) => cell / colSums[column]));
+  const vector = normalized.map((row) => row.reduce((sum, cell) => sum + cell, 0) / n);
+  const weighted = matrix.map((row) => row.reduce((sum, cell, index) => sum + cell * vector[index], 0));
+  const consistencyVector = weighted.map((value, index) => value / vector[index]);
+  const lambdaMax = consistencyVector.reduce((sum, value) => sum + value, 0) / n;
+  const ci = (lambdaMax - n) / (n - 1);
+  const ri = RI[n] ?? NaN;
+  const cr = Number.isFinite(ri) && ri > 0 ? ci / ri : 0;
+  const weights = Object.fromEntries(criteria.map((criterion, index) => [criterion.id, vector[index]]));
+  return { weights, cr, lambdaMax, ci, ri, consistent: cr <= 0.1, consistencyVector };
+}
+
+function normalizeWeights(weights, criteria = activeCriteria()) {
+  const total = criteria.reduce((sum, criterion) => sum + (weights[criterion.id] ?? 0), 0);
+  if (!total) return equalWeights(criteria);
+  return Object.fromEntries(criteria.map((criterion) => [criterion.id, (weights[criterion.id] ?? 0) / total]));
+}
+
+function participantAHPProfile(participant) {
+  const categoryResults = activeCategories().map((category) => {
+    const complete = categoryComplete(participant, category);
+    const result = complete ? computeAHP(buildCategoryMatrix(participant, category), category.criteria) : {
+      weights: equalWeights(category.criteria),
+      cr: NaN,
+      lambdaMax: NaN,
+      ci: NaN,
+      consistent: false,
+      consistencyVector: [],
+    };
+    return { category, complete, result };
+  });
+  const complete = categoryResults.every((item) => item.complete);
+  const consistent = categoryResults.every((item) => item.result.consistent);
+  const weights = {};
+  for (const item of categoryResults) Object.assign(weights, item.result.weights);
+  return { complete, consistent, categoryResults, weights, balancedWeights: normalizeWeights(weights) };
+}
+
+function aggregateGroupWeights() {
+  const criteria = activeCriteria();
+  const included = state.participants
+    .map((participant) => ({ participant, profile: participantAHPProfile(participant) }))
+    .filter((item) => item.profile.complete && item.profile.consistent);
+
+  if (!criteria.length || !included.length) {
+    return { weights: equalWeights(criteria), average: {}, included, excludedCount: state.participants.length };
+  }
+
+  const average = {};
+  for (const criterion of criteria) {
+    average[criterion.id] = included.reduce((sum, item) => sum + (item.profile.weights[criterion.id] ?? 0), 0) / included.length;
+  }
+  return {
+    weights: normalizeWeights(average, criteria),
+    average,
+    included,
+    excludedCount: state.participants.length - included.length,
+  };
+}
+
+function renderParticipants() {
+  const list = document.querySelector('#participantList');
+  if (!list) return;
+
+  list.innerHTML = state.participants.map((participant) => {
+    const profile = participantAHPProfile(participant);
+    const included = profile.complete && profile.consistent;
+    const status = profile.complete ? (included ? 'included' : 'review') : 'pending';
+    const active = participant.id === state.selectedParticipantId ? 'active' : '';
+    const name = escapeHtml(participant.name);
+    const crText = profile.categoryResults.length
+      ? profile.categoryResults.map((item) => `${item.category.name}: ${Number.isFinite(item.result.cr) ? item.result.cr.toFixed(3) : 'n/a'}`).join(' | ')
+      : 'No active categories';
+    return `
+      <article class="participant-card ${active}" data-participant-card="${participant.id}">
+        <button class="participant-select" type="button" data-select-participant="${participant.id}">
+          <strong>${name}</strong>
+          <span class="${included ? 'good' : profile.complete ? 'bad' : ''}">${crText} - ${status}</span>
+        </button>
+        <div class="participant-tools">
+          <input value="${name}" data-participant-name="${participant.id}" aria-label="Participant name" />
+          <button class="ghost" type="button" data-open-ahp="${participant.id}">Pairwise</button>
+          <button class="ghost delete" type="button" data-delete-participant="${participant.id}" ${state.participants.length === 1 ? 'disabled' : ''}>Delete</button>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function renderGroupWeights() {
+  const summary = document.querySelector('#groupSummary');
+  const bars = document.querySelector('#groupWeightBars');
+  if (!summary || !bars) return;
+
+  const group = aggregateGroupWeights();
+  summary.innerHTML = `
+    <p class="meta">${group.included.length} participant${group.included.length === 1 ? '' : 's'} included - ${group.excludedCount} not included</p>
+    <p class="meta">Aggregation: arithmetic mean per criterion, then one global normalization across all active criteria.</p>
+  `;
+  bars.innerHTML = activeCriteria().map((criterion) => `
+    <div class="bar-row">
+      <div>
+        <div>${criterion.id} ${criterion.name}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(group.weights[criterion.id] ?? 0) * 100}%"></div></div>
+      </div>
+      <strong>${(((group.weights[criterion.id] ?? 0) * 100)).toFixed(1)}%</strong>
+    </div>
+  `).join('');
+}
+
+function renderComparisons() {
+  const table = document.querySelector('#participantComparisonTable');
+  if (!table) return;
+  const criteria = activeCriteria();
+  const group = aggregateGroupWeights();
+  table.innerHTML = `
+    <thead>
+      <tr><th>Participant</th>${criteria.map((criterion) => `<th>${escapeHtml(criterion.id)}</th>`).join('')}<th>CR by category</th></tr>
+    </thead>
+    <tbody>
+      ${state.participants.map((participant) => {
+        const profile = participantAHPProfile(participant);
+        return `
+          <tr>
+            <td>${escapeHtml(participant.name)}</td>
+            ${criteria.map((criterion) => `<td>${((profile.balancedWeights[criterion.id] ?? 0) * 100).toFixed(1)}%</td>`).join('')}
+            <td>${profile.categoryResults.map((item) => `${escapeHtml(item.category.name)} ${Number.isFinite(item.result.cr) ? item.result.cr.toFixed(3) : 'n/a'}`).join('<br>')}</td>
+          </tr>
+        `;
+      }).join('')}
+      <tr><td><strong>Average</strong></td>${criteria.map((criterion) => `<td>${((group.average[criterion.id] ?? 0) * 100).toFixed(1)}%</td>`).join('')}<td></td></tr>
+      <tr><td><strong>Balanced</strong></td>${criteria.map((criterion) => `<td><strong>${((group.weights[criterion.id] ?? 0) * 100).toFixed(1)}%</strong></td>`).join('')}<td></td></tr>
+    </tbody>
+  `;
+}
+
+function formatPositionDetail(position, leftId, rightId) {
+  const score = POSITION_TO_SCORE[clampPosition(position)];
+  if (score === 1) return `${leftId} and ${rightId} are equally important (position 9)`;
+  const stronger = score > 1 ? leftId : rightId;
+  const weaker = score > 1 ? rightId : leftId;
+  const displayScore = score > 1 ? score : 1 / score;
+  return `${stronger} is ${displayScore.toFixed(0)}x more important than ${weaker}`;
+}
+
+function renderAHPDialog(participant) {
+  const body = document.querySelector('#ahpDialogBody');
+  const title = document.querySelector('#ahpDialogTitle');
+  if (!body || !title) return;
+  ensureParticipantJudgements(participant);
+  title.textContent = `${participant.name} pairwise comparisons`;
+  body.innerHTML = activeCategories().map((category) => {
+    const profile = participantAHPProfile(participant).categoryResults.find((item) => item.category.id === category.id);
+    return `
+      <section class="ahp-category">
+        <div class="category-headline">
+          <h4>${escapeHtml(category.name)}</h4>
+          <span class="metric ${profile?.result.consistent ? 'pass' : 'fail'}">CR ${Number.isFinite(profile?.result.cr) ? profile.result.cr.toFixed(3) : 'n/a'}</span>
+        </div>
+        ${category.criteria.length <= 1 ? '<p class="meta">Only one active criterion. Weight is 100%.</p>' : categoryPairs(category.criteria).map(([left, right]) => {
+          const key = judgementKey(category.id, left.id, right.id);
+          const position = clampPosition(participant.judgements[key]);
+          return `
+            <div class="comparison">
+              <label>
+                <div class="comparison-top">
+                  <strong>${escapeHtml(left.id)} ${escapeHtml(left.name)}</strong>
+                  <strong>${escapeHtml(right.id)} ${escapeHtml(right.name)}</strong>
+                </div>
+                <input type="range" min="1" max="17" step="1" value="${position}" data-judgement="${key}" data-left="${left.id}" data-right="${right.id}" />
+                <div class="saaty-scale" aria-hidden="true">
+                  <span>9</span><span>8</span><span>7</span><span>6</span><span>5</span><span>4</span><span>3</span><span>2</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span>
+                </div>
+                <div class="saaty-current">${formatPositionDetail(position, left.id, right.id)}</div>
+              </label>
+            </div>
+          `;
+        }).join('')}
+      </section>
+    `;
+  }).join('');
+}
+
+function renderWeights() {
+  const profile = participantAHPProfile(selectedParticipant());
+  const bars = document.querySelector('#weightBars');
+  bars.innerHTML = activeCriteria().map((criterion) => `
+    <div class="bar-row">
+      <div>
+        <div>${criterion.id} ${criterion.name}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(profile.balancedWeights[criterion.id] ?? 0) * 100}%"></div></div>
+      </div>
+      <strong>${(((profile.balancedWeights[criterion.id] ?? 0) * 100)).toFixed(1)}%</strong>
+    </div>
+  `).join('');
+
+  const consistency = document.querySelector('#consistency');
+  consistency.className = `metric ${profile.complete && profile.consistent ? 'pass' : 'fail'}`;
+  consistency.textContent = profile.categoryResults.map((item) => {
+    const cr = Number.isFinite(item.result.cr) ? item.result.cr.toFixed(3) : 'n/a';
+    return `${item.category.name} CR ${cr}`;
+  }).join(' | ');
+
+  const participant = selectedParticipant();
+  const socraticInput = document.querySelector('#socraticInput');
+  if (socraticInput && socraticInput.value !== participant.socraticInput) {
+    socraticInput.value = participant.socraticInput;
+  }
+}
+
 function benchmarkFailureDetails(alternative) {
   return activeCriteria().filter((criterion) => {
     const benchmarkResult = evaluateBenchmark(alternative.scores[criterion.id], criterion, alternative);
@@ -828,7 +1167,7 @@ function rankingWeightContext() {
 
   if (state.rankingWeightSource === 'participant') {
     const participant = selectedParticipant();
-    return { weights: ahpResult(participant.comparisons).weights, label: `${escapeHtml(participant.name)} weights` };
+    return { weights: participantAHPProfile(participant).balancedWeights, label: `${escapeHtml(participant.name)} weights` };
   }
 
   const group = aggregateGroupWeights();
@@ -933,44 +1272,52 @@ function deriveSocraticWeights() {
   const input = document.querySelector('#socraticInput').value;
   participant.socraticInput = input;
   const text = input.toLowerCase();
-  const criteria = activeCriteria();
+  const categories = activeCategories();
   const terms = {
     cost: ['cost', 'investment', 'budget', 'life cycle', 'payback', 'rent'],
     comfort: ['comfort', 'thermal', 'tenant', 'health'],
     environment: ['energy', 'emission', 'gas', 'renewable', 'label', 'demand'],
     nuisance: ['nuisance', 'disruption', 'days', 'construction'],
   };
-  const scores = {};
+  const judgements = {};
 
-  for (const criterion of criteria) {
-    let score = 1;
-    const haystack = `${criterion.name} ${criterion.pillar}`.toLowerCase();
-    for (const keywords of Object.values(terms)) {
-      const mentioned = keywords.some((keyword) => text.includes(keyword));
-      const matchesCriterion = keywords.some((keyword) => haystack.includes(keyword));
-      if (mentioned && matchesCriterion) score += 2;
+  for (const category of categories) {
+    const scores = {};
+    for (const criterion of category.criteria) {
+      let score = 1;
+      const haystack = `${criterion.name} ${criterion.pillar}`.toLowerCase();
+      for (const keywords of Object.values(terms)) {
+        const mentioned = keywords.some((keyword) => text.includes(keyword));
+        const matchesCriterion = keywords.some((keyword) => haystack.includes(keyword));
+        if (mentioned && matchesCriterion) score += 2;
+      }
+      if (criterion.mandatory) score += 0.5;
+      scores[criterion.id] = score;
     }
-    if (criterion.mandatory) score += 0.5;
-    scores[criterion.id] = score;
+    Object.assign(judgements, weightsToApproxJudgements(scores, category));
   }
 
-  const total = Object.values(scores).reduce((sum, value) => sum + value, 0);
-  const weights = Object.fromEntries(Object.entries(scores).map(([id, score]) => [id, score / total]));
-  participant.comparisons = weightsToApproxComparisons(weights, criteria);
+  participant.judgements = { ...(participant.judgements || {}), ...judgements };
   participant.complete = true;
   render();
 }
 
-function weightsToApproxComparisons(weights, criteria) {
-  const comparisons = {};
-  for (let i = 0; i < criteria.length; i += 1) {
-    for (let j = i + 1; j < criteria.length; j += 1) {
-      const ratio = (weights[criteria[i].id] || 0.01) / (weights[criteria[j].id] || 0.01);
-      const rounded = Math.max(1 / 9, Math.min(9, Math.round(ratio)));
-      comparisons[comparisonKey(criteria[i].id, criteria[j].id)] = rounded || 1;
+function weightsToApproxJudgements(weights, category) {
+  const judgements = {};
+  for (const [left, right] of categoryPairs(category.criteria)) {
+    const ratio = (weights[left.id] || 0.01) / (weights[right.id] || 0.01);
+    let bestPosition = 9;
+    let bestDelta = Infinity;
+    for (const [position, score] of Object.entries(POSITION_TO_SCORE)) {
+      const delta = Math.abs(score - ratio);
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestPosition = Number(position);
+      }
     }
+    judgements[judgementKey(category.id, left.id, right.id)] = bestPosition;
   }
-  return comparisons;
+  return judgements;
 }
 
 document.addEventListener('click', (event) => {
@@ -988,6 +1335,7 @@ document.addEventListener('click', (event) => {
     for (const alternative of state.alternatives) delete alternative.scores[deleteCriterion];
     for (const participant of state.participants) {
       participant.comparisons = Object.fromEntries(Object.entries(participant.comparisons).filter(([key]) => !key.split('|').includes(deleteCriterion)));
+      participant.judgements = Object.fromEntries(Object.entries(participant.judgements || {}).filter(([key]) => !key.split('|').includes(deleteCriterion)));
     }
     render();
   }
@@ -1009,6 +1357,21 @@ document.addEventListener('click', (event) => {
     state.participants = state.participants.filter((participant) => participant.id !== deleteParticipant);
     if (state.selectedParticipantId === deleteParticipant) state.selectedParticipantId = state.participants[0].id;
     render();
+  }
+
+  const openAhp = event.target.dataset.openAhp;
+  if (openAhp) {
+    const participant = state.participants.find((item) => item.id === openAhp);
+    if (participant) {
+      state.selectedParticipantId = participant.id;
+      renderAHPDialog(participant);
+      document.querySelector('#ahpDialog')?.showModal();
+      render();
+    }
+  }
+
+  if (event.target.id === 'closeAhpDialog' || event.target.id === 'doneAhpDialog') {
+    document.querySelector('#ahpDialog')?.close();
   }
 
   if (event.target.id === 'openAlternativeDialog') {
@@ -1142,6 +1505,21 @@ document.addEventListener('change', (event) => {
 });
 
 document.addEventListener('input', (event) => {
+  if (event.target.dataset.judgement && event.target.type === 'range') {
+    const participant = selectedParticipant();
+    participant.judgements ||= {};
+    participant.judgements[event.target.dataset.judgement] = clampPosition(event.target.value);
+    participant.complete = participantAHPProfile(participant).complete;
+    const current = event.target.closest('.comparison').querySelector('.saaty-current');
+    current.textContent = formatPositionDetail(event.target.value, event.target.dataset.left, event.target.dataset.right);
+    renderParticipants();
+    renderWeights();
+    renderGroupWeights();
+    renderComparisons();
+    renderRanking();
+    saveState();
+  }
+
   if (event.target.dataset.comparison && event.target.type === 'range') {
     const value = sliderToSaaty(event.target.value);
     const participant = selectedParticipant();
@@ -1212,7 +1590,13 @@ document.querySelector('#alternativeForm').addEventListener('submit', (event) =>
 
 document.querySelector('#equalWeightsButton').addEventListener('click', () => {
   const participant = selectedParticipant();
-  participant.comparisons = {};
+  const judgements = {};
+  for (const category of activeCategories()) {
+    for (const [left, right] of categoryPairs(category.criteria)) {
+      judgements[judgementKey(category.id, left.id, right.id)] = 9;
+    }
+  }
+  participant.judgements = { ...(participant.judgements || {}), ...judgements };
   participant.complete = true;
   render();
 });
@@ -1227,6 +1611,7 @@ document.querySelector('#addParticipantButton').addEventListener('click', () => 
 document.querySelector('#duplicateParticipantButton').addEventListener('click', () => {
   const current = selectedParticipant();
   const participant = createParticipant(`${current.name} copy`, current.comparisons, current.socraticInput);
+  participant.judgements = structuredClone(current.judgements || {});
   participant.complete = current.complete;
   state.participants.push(participant);
   state.selectedParticipantId = participant.id;
