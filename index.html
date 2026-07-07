@@ -20,11 +20,6 @@
     </header>
 
     <main>
-      <datalist id="interventionLevels">
-        <option value="Basic"></option>
-        <option value="Medium"></option>
-        <option value="Deep"></option>
-      </datalist>
       <nav class="tabs" aria-label="Workflow">
         <button class="tab active" data-view="criteria" type="button">Criteria</button>
         <button class="tab" data-view="alternatives" type="button">Alternatives</button>
@@ -95,11 +90,20 @@
             <div class="alternative-form-head">
               <label>
                 Alternative name
-                <input name="name" placeholder="e.g. Medium envelope upgrade" required />
+                <input name="name" placeholder="e.g. Moderate envelope upgrade" required />
               </label>
               <label>
                 Intervention level (scenario)
-                <input name="level" list="interventionLevels" placeholder="Basic, Medium, Deep, or custom" required />
+                <select name="levelPreset" required>
+                  <option>Basic</option>
+                  <option>Moderate</option>
+                  <option>Deep</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label>
+                Custom scenario name
+                <input name="levelCustom" placeholder="Type scenario name" />
               </label>
             </div>
             <div id="alternativeCriteriaFields" class="alternative-fields"></div>

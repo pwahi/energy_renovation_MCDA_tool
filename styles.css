@@ -536,6 +536,21 @@ td input {
   font-size: 12px;
 }
 
+.level-editor {
+  display: grid;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.level-editor select,
+.level-editor input {
+  width: 100%;
+}
+
+.hidden {
+  display: none !important;
+}
+
 .split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
