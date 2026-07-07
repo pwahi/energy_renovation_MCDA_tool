@@ -133,10 +133,17 @@ h4 {
   text-transform: uppercase;
 }
 
+.app-meta {
+  margin: 0.35rem 0 0;
+  color: var(--color-amber-light);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 main {
-  max-width: 960px;
+  width: min(100% - 48px, 1600px);
   margin: 0 auto;
-  padding: 24px;
+  padding: 24px 0 40px;
 }
 
 .tabs {
