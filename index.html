@@ -36,7 +36,6 @@
           <form id="criterionForm" class="inline-form">
             <input name="name" placeholder="Custom KPI name" required />
             <input name="unit" placeholder="Unit" required />
-            <input name="benchmark" placeholder="Benchmark, e.g. Label B or better" />
             <select name="pillar" required>
               <option>Environmental</option>
               <option>Economic</option>
@@ -46,6 +45,19 @@
               <option value="min">Minimize</option>
               <option value="max">Maximize</option>
             </select>
+            <select name="benchmarkType" required>
+              <option value="none">No benchmark</option>
+              <option value="numeric-min">Numeric minimum (≥)</option>
+              <option value="numeric-min-strict">Numeric minimum (&gt;)</option>
+              <option value="numeric-max">Numeric maximum (≤)</option>
+              <option value="numeric-max-strict">Numeric maximum (&lt;)</option>
+              <option value="directional">Use KPI direction</option>
+              <option value="energy-label">Energy label threshold</option>
+              <option value="lower-than-base">Lower than base case</option>
+              <option value="higher-than-base">Higher than base case</option>
+              <option value="manual">Manual / descriptive</option>
+            </select>
+            <input name="benchmarkValue" placeholder="Benchmark value" />
             <button type="submit">Add KPI</button>
           </form>
         </div>

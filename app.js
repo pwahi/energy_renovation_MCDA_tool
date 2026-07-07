@@ -19,19 +19,19 @@ const RI = {
 };
 
 const defaultCriteria = [
-  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmarkType: 'lower-than-base', benchmarkValue: '', benchmarkLocked: true },
-  { id: 'C2', name: 'Energy label', unit: 'label', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'energy-label', benchmarkValue: 'B', benchmarkLocked: true },
-  { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '1.40', benchmarkLocked: true },
-  { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'numeric-min-strict', benchmarkValue: '0', benchmarkLocked: true },
-  { id: 'C5', name: 'Gas savings', unit: 'm3/yr', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'numeric-min-strict', benchmarkValue: '0', benchmarkLocked: true },
-  { id: 'C6', name: 'Investment costs', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: true },
-  { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '7000', benchmarkLocked: true },
-  { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: true },
-  { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'numeric-max', benchmarkValue: '20', benchmarkLocked: true },
-  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmarkType: 'lower-than-base', benchmarkValue: '', benchmarkLocked: true },
-  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: true },
-  { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: true },
-  { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '26.50', benchmarkLocked: true },
+  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmarkType: 'lower-than-base', benchmarkValue: '' },
+  { id: 'C2', name: 'Energy label', unit: 'label', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'energy-label', benchmarkValue: 'B' },
+  { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '1.40' },
+  { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'numeric-min-strict', benchmarkValue: '0' },
+  { id: 'C5', name: 'Gas savings', unit: 'm3/yr', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'numeric-min-strict', benchmarkValue: '0' },
+  { id: 'C6', name: 'Investment costs', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '' },
+  { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '7000' },
+  { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '' },
+  { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'numeric-max', benchmarkValue: '20' },
+  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmarkType: 'lower-than-base', benchmarkValue: '' },
+  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'none', benchmarkValue: '' },
+  { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '' },
+  { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '26.50' },
 ];
 
 function createId(prefix = 'id') {
@@ -405,16 +405,6 @@ function renderCriteria() {
 }
 
 function renderBenchmarkControls(criterion) {
-  if (criterion.benchmarkLocked) {
-    return `
-      <div class="benchmark-field locked">
-        <span>Benchmark</span>
-        <strong>${escapeHtml(benchmarkDisplay(criterion))}</strong>
-        <span class="meta">${escapeHtml(benchmarkTypeLabel(criterion.benchmarkType))}</span>
-      </div>
-    `;
-  }
-
   return `
     <div class="benchmark-field">
       <label>
@@ -423,6 +413,7 @@ function renderBenchmarkControls(criterion) {
           ${BENCHMARK_TYPES.map((type) => `<option value="${type.value}" ${criterion.benchmarkType === type.value ? 'selected' : ''}>${type.label}</option>`).join('')}
         </select>
       </label>
+      <div class="meta"><strong>${escapeHtml(benchmarkDisplay(criterion))}</strong></div>
       ${benchmarkNeedsValue(criterion.benchmarkType) ? renderBenchmarkValueControl(criterion) : ''}
     </div>
   `;
@@ -975,7 +966,13 @@ document.querySelector('#criterionForm').addEventListener('submit', (event) => {
     unit: data.get('unit'),
     pillar: data.get('pillar'),
     direction: data.get('direction'),
-    ...benchmarkFromLegacy({ benchmark: String(data.get('benchmark') || '').trim(), direction: data.get('direction'), name: data.get('name') }, null),
+    benchmarkType: data.get('benchmarkType'),
+    benchmarkValue: String(data.get('benchmarkValue') || '').trim(),
+    benchmark: benchmarkDisplay({
+      direction: data.get('direction'),
+      benchmarkType: data.get('benchmarkType'),
+      benchmarkValue: String(data.get('benchmarkValue') || '').trim(),
+    }),
     mandatory: false,
     active: true,
   });
