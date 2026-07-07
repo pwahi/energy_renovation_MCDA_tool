@@ -19,19 +19,19 @@ const RI = {
 };
 
 const defaultCriteria = [
-  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmark: 'Lower than existing HT supply' },
-  { id: 'C2', name: 'Energy label', unit: 'label', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: 'Label B or better' },
-  { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false, benchmark: '≤ 1,40' },
-  { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: '> 0' },
-  { id: 'C5', name: 'Gas savings', unit: 'm3/yr', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmark: '> 0' },
-  { id: 'C6', name: 'Investment costs', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: '' },
-  { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false, benchmark: '<€7.000' },
-  { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: '' },
-  { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmark: '<20 years' },
-  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmark: 'Lower than existing HT supply' },
-  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmark: '' },
-  { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmark: '' },
-  { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmark: '<€26,50' },
+  { id: 'C1', name: 'Space heating demand', unit: 'kWh/m2', pillar: 'Environmental', direction: 'min', mandatory: true, active: true, benchmarkType: 'lower-than-base', benchmarkValue: '', benchmarkLocked: true },
+  { id: 'C2', name: 'Energy label', unit: 'label', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'energy-label', benchmarkValue: 'B', benchmarkLocked: true },
+  { id: 'C3', name: 'Energy index', unit: 'index', pillar: 'Environmental', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '1.40', benchmarkLocked: true },
+  { id: 'C4', name: 'Renewable energy share', unit: '%', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'numeric-min-strict', benchmarkValue: '0', benchmarkLocked: true },
+  { id: 'C5', name: 'Gas savings', unit: 'm3/yr', pillar: 'Environmental', direction: 'max', mandatory: false, active: true, benchmarkType: 'numeric-min-strict', benchmarkValue: '0', benchmarkLocked: true },
+  { id: 'C6', name: 'Investment costs', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: true },
+  { id: 'C7', name: 'Cost per label step', unit: 'EUR/step', pillar: 'Economic', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '7000', benchmarkLocked: true },
+  { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: true },
+  { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'numeric-max', benchmarkValue: '20', benchmarkLocked: true },
+  { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmarkType: 'lower-than-base', benchmarkValue: '', benchmarkLocked: true },
+  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: true },
+  { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: true },
+  { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '26.50', benchmarkLocked: true },
 ];
 
 function createId(prefix = 'id') {
@@ -119,10 +119,11 @@ function normalizeCriteria(criteria) {
   const defaults = new Map(defaultCriteria.map((criterion) => [criterion.id, criterion]));
   return criteria.map((criterion) => {
     const defaultCriterion = defaults.get(criterion.id);
-    const benchmark = criterion.benchmark === undefined ? defaultCriterion?.benchmark ?? '' : criterion.benchmark;
+    const benchmark = benchmarkFromLegacy(criterion, defaultCriterion);
     return {
       ...criterion,
-      benchmark: String(benchmark ?? ''),
+      ...benchmark,
+      benchmark: benchmarkDisplay({ ...criterion, ...benchmark }),
     };
   });
 }
@@ -190,6 +191,81 @@ const ENERGY_LABEL_SCORES = {
   G: 1,
 };
 
+const BENCHMARK_TYPES = [
+  { value: 'none', label: 'No benchmark' },
+  { value: 'numeric-min', label: 'Numeric minimum (score >= value)' },
+  { value: 'numeric-min-strict', label: 'Numeric minimum (score > value)' },
+  { value: 'numeric-max', label: 'Numeric maximum (score <= value)' },
+  { value: 'numeric-max-strict', label: 'Numeric maximum (score < value)' },
+  { value: 'directional', label: 'Use KPI direction' },
+  { value: 'energy-label', label: 'Energy label threshold' },
+  { value: 'lower-than-base', label: 'Lower than base case' },
+  { value: 'higher-than-base', label: 'Higher than base case' },
+  { value: 'manual', label: 'Manual / descriptive only' },
+];
+
+function benchmarkTypeLabel(type) {
+  return BENCHMARK_TYPES.find((item) => item.value === type)?.label || 'Benchmark';
+}
+
+function benchmarkNeedsValue(type) {
+  return ['numeric-min', 'numeric-min-strict', 'numeric-max', 'numeric-max-strict', 'directional', 'energy-label', 'manual'].includes(type);
+}
+
+function benchmarkDisplay(criterion) {
+  const type = criterion.benchmarkType || 'manual';
+  const value = criterion.benchmarkValue || '';
+  if (type === 'none') return 'No benchmark';
+  if (type === 'lower-than-base') return 'Lower than base case';
+  if (type === 'higher-than-base') return 'Higher than base case';
+  if (type === 'energy-label') return `Label ${value || 'B'} or better`;
+  if (type === 'numeric-min') return `≥ ${value}`;
+  if (type === 'numeric-min-strict') return `> ${value}`;
+  if (type === 'numeric-max') return `≤ ${value}`;
+  if (type === 'numeric-max-strict') return `< ${value}`;
+  if (type === 'directional') return `${criterion.direction === 'max' ? '≥' : '≤'} ${value}`;
+  return value || 'Manual benchmark';
+}
+
+function benchmarkFromLegacy(criterion, defaultCriterion) {
+  if (criterion.benchmarkType) {
+    return {
+      benchmarkType: criterion.benchmarkType,
+      benchmarkValue: String(criterion.benchmarkValue ?? ''),
+      benchmarkLocked: Boolean(criterion.benchmarkLocked),
+    };
+  }
+  if (defaultCriterion?.benchmarkType) {
+    return {
+      benchmarkType: defaultCriterion.benchmarkType,
+      benchmarkValue: String(defaultCriterion.benchmarkValue ?? ''),
+      benchmarkLocked: Boolean(defaultCriterion.benchmarkLocked),
+    };
+  }
+
+  const raw = String(criterion.benchmark ?? '').trim();
+  if (!raw || raw === '-') return { benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: false };
+  if (isRelativeBenchmark(raw)) {
+    return {
+      benchmarkType: /higher|above|more/i.test(raw) ? 'higher-than-base' : 'lower-than-base',
+      benchmarkValue: '',
+      benchmarkLocked: false,
+    };
+  }
+  if (/label|A\+\+|A\+|\b[A-G]\b/i.test(raw)) {
+    const label = String(raw).toUpperCase().match(/A\+\+|A\+|\b[A-G]\b/)?.[0] || 'B';
+    return { benchmarkType: 'energy-label', benchmarkValue: label, benchmarkLocked: false };
+  }
+  const value = parseNumericValue(raw);
+  if (Number.isFinite(value)) {
+    if (raw.includes('>')) return { benchmarkType: 'numeric-min-strict', benchmarkValue: String(value), benchmarkLocked: false };
+    if (raw.includes('≥') || raw.includes('>=')) return { benchmarkType: 'numeric-min', benchmarkValue: String(value), benchmarkLocked: false };
+    if (raw.includes('<')) return { benchmarkType: 'numeric-max-strict', benchmarkValue: String(value), benchmarkLocked: false };
+    return { benchmarkType: criterion.direction === 'max' ? 'numeric-min' : 'numeric-max', benchmarkValue: String(value), benchmarkLocked: false };
+  }
+  return { benchmarkType: 'manual', benchmarkValue: raw, benchmarkLocked: false };
+}
+
 function normalizeNumberText(value) {
   return String(value ?? '')
     .replace(/[€\sA-Za-z/%]/g, '')
@@ -225,47 +301,59 @@ function isRelativeBenchmark(benchmark) {
 }
 
 function evaluateBenchmark(score, criterion, alternative = null) {
-  const rawBenchmark = String(criterion.benchmark ?? '').trim();
-  if (!rawBenchmark || rawBenchmark === '-') return { evaluable: false, passes: true, reason: 'No benchmark set' };
+  const type = criterion.benchmarkType || 'manual';
+  const rawBenchmark = String(criterion.benchmarkValue ?? criterion.benchmark ?? '').trim();
+  if (type === 'none') return { evaluable: false, passes: true, reason: 'No benchmark set' };
 
-  if (isRelativeBenchmark(rawBenchmark)) {
+  if (type === 'lower-than-base' || type === 'higher-than-base') {
     const base = baseAlternative();
     if (!base || alternative?.id === base.id) {
-      return { evaluable: false, passes: true, reason: rawBenchmark };
+      return { evaluable: false, passes: true, reason: benchmarkDisplay(criterion) };
     }
     const scoreValue = scoreValueForCriterion(score, criterion);
     const baseValue = scoreValueForCriterion(base.scores[criterion.id], criterion);
     if (Number.isFinite(scoreValue) && Number.isFinite(baseValue)) {
-      const passes = criterion.direction === 'max' ? scoreValue > baseValue : scoreValue < baseValue;
-      return { evaluable: true, passes, reason: `${rawBenchmark}: ${base.name}` };
+      const passes = type === 'higher-than-base' ? scoreValue > baseValue : scoreValue < baseValue;
+      return { evaluable: true, passes, reason: `${benchmarkDisplay(criterion)}: ${base.name}` };
     }
-    return { evaluable: false, passes: true, reason: rawBenchmark };
+    return { evaluable: false, passes: true, reason: benchmarkDisplay(criterion) };
   }
 
-  if (criterion.id === 'C2' || /label/i.test(criterion.name)) {
+  if (type === 'energy-label') {
     const scoreLabel = parseEnergyLabel(score);
-    const benchmarkLabel = parseEnergyLabel(rawBenchmark);
+    const benchmarkLabel = parseEnergyLabel(rawBenchmark || 'B');
     if (Number.isFinite(scoreLabel) && Number.isFinite(benchmarkLabel)) {
-      return { evaluable: true, passes: scoreLabel >= benchmarkLabel, reason: rawBenchmark };
+      return { evaluable: true, passes: scoreLabel >= benchmarkLabel, reason: benchmarkDisplay(criterion) };
     }
   }
 
   const scoreValue = scoreValueForCriterion(score, criterion);
   const benchmarkValue = parseNumericValue(rawBenchmark);
   if (Number.isFinite(scoreValue) && Number.isFinite(benchmarkValue)) {
-    const operator = rawBenchmark.includes('≤') || rawBenchmark.includes('<=') ? '<='
-      : rawBenchmark.includes('≥') || rawBenchmark.includes('>=') ? '>='
-        : rawBenchmark.includes('<') ? '<'
-          : rawBenchmark.includes('>') ? '>'
+    const operator = type === 'numeric-min' ? '>='
+      : type === 'numeric-min-strict' ? '>'
+        : type === 'numeric-max' ? '<='
+          : type === 'numeric-max-strict' ? '<'
             : criterion.direction === 'max' ? '>=' : '<=';
     const passes = operator === '<=' ? scoreValue <= benchmarkValue
       : operator === '<' ? scoreValue < benchmarkValue
         : operator === '>=' ? scoreValue >= benchmarkValue
           : scoreValue > benchmarkValue;
-    return { evaluable: true, passes, reason: rawBenchmark };
+    return { evaluable: true, passes, reason: benchmarkDisplay(criterion) };
   }
 
-  return { evaluable: false, passes: true, reason: rawBenchmark };
+  if (criterion.benchmark && !criterion.benchmarkType) {
+    return evaluateLegacyBenchmark(score, criterion, alternative);
+  }
+
+  return { evaluable: false, passes: true, reason: benchmarkDisplay(criterion) };
+}
+
+function evaluateLegacyBenchmark(score, criterion, alternative = null) {
+  const rawBenchmark = String(criterion.benchmark ?? '').trim();
+  if (!rawBenchmark || rawBenchmark === '-') return { evaluable: false, passes: true, reason: 'No benchmark set' };
+  const migrated = { ...criterion, ...benchmarkFromLegacy(criterion, null) };
+  return evaluateBenchmark(score, migrated, alternative);
 }
 
 function render() {
@@ -299,10 +387,7 @@ function renderCriteria() {
             <div>
               <h4>${escapeHtml(criterion.id)} ${escapeHtml(criterion.name)}</h4>
               <p class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'} ${criterion.mandatory ? '| mandatory gate' : ''}</p>
-              <label class="benchmark-field">
-                Benchmark rule
-                <input data-benchmark="${criterion.id}" value="${escapeHtml(criterion.benchmark ?? '')}" placeholder="e.g. Label B or better" />
-              </label>
+              ${renderBenchmarkControls(criterion)}
             </div>
             <div class="criterion-tools">
               <label class="switch">
@@ -317,6 +402,50 @@ function renderCriteria() {
     `;
     grid.appendChild(column);
   }
+}
+
+function renderBenchmarkControls(criterion) {
+  if (criterion.benchmarkLocked) {
+    return `
+      <div class="benchmark-field locked">
+        <span>Benchmark</span>
+        <strong>${escapeHtml(benchmarkDisplay(criterion))}</strong>
+        <span class="meta">${escapeHtml(benchmarkTypeLabel(criterion.benchmarkType))}</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="benchmark-field">
+      <label>
+        Benchmark type
+        <select data-benchmark-type="${criterion.id}">
+          ${BENCHMARK_TYPES.map((type) => `<option value="${type.value}" ${criterion.benchmarkType === type.value ? 'selected' : ''}>${type.label}</option>`).join('')}
+        </select>
+      </label>
+      ${benchmarkNeedsValue(criterion.benchmarkType) ? renderBenchmarkValueControl(criterion) : ''}
+    </div>
+  `;
+}
+
+function renderBenchmarkValueControl(criterion) {
+  if (criterion.benchmarkType === 'energy-label') {
+    return `
+      <label>
+        Threshold label
+        <select data-benchmark-value="${criterion.id}">
+          ${Object.keys(ENERGY_LABEL_SCORES).map((label) => `<option value="${label}" ${criterion.benchmarkValue === label ? 'selected' : ''}>${label} or better</option>`).join('')}
+        </select>
+      </label>
+    `;
+  }
+
+  return `
+    <label>
+      Benchmark value
+      <input data-benchmark-value="${criterion.id}" value="${escapeHtml(criterion.benchmarkValue ?? '')}" placeholder="Benchmark value" />
+    </label>
+  `;
 }
 
 function renderScores() {
@@ -749,10 +878,21 @@ document.addEventListener('change', (event) => {
     render();
   }
 
-  if (event.target.dataset.benchmark) {
-    const criterion = state.criteria.find((item) => item.id === event.target.dataset.benchmark);
+  if (event.target.dataset.benchmarkType) {
+    const criterion = state.criteria.find((item) => item.id === event.target.dataset.benchmarkType);
     if (criterion) {
-      criterion.benchmark = event.target.value.trim();
+      criterion.benchmarkType = event.target.value;
+      if (!benchmarkNeedsValue(criterion.benchmarkType)) criterion.benchmarkValue = '';
+      criterion.benchmark = benchmarkDisplay(criterion);
+    }
+    render();
+  }
+
+  if (event.target.dataset.benchmarkValue) {
+    const criterion = state.criteria.find((item) => item.id === event.target.dataset.benchmarkValue);
+    if (criterion) {
+      criterion.benchmarkValue = event.target.value.trim();
+      criterion.benchmark = benchmarkDisplay(criterion);
     }
     render();
   }
@@ -835,7 +975,7 @@ document.querySelector('#criterionForm').addEventListener('submit', (event) => {
     unit: data.get('unit'),
     pillar: data.get('pillar'),
     direction: data.get('direction'),
-    benchmark: String(data.get('benchmark') || '').trim(),
+    ...benchmarkFromLegacy({ benchmark: String(data.get('benchmark') || '').trim(), direction: data.get('direction'), name: data.get('name') }, null),
     mandatory: false,
     active: true,
   });

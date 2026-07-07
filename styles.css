@@ -321,21 +321,31 @@ td input,
 .benchmark-field {
   display: grid;
   gap: 4px;
-  max-width: 230px;
+  max-width: 260px;
   margin-top: 8px;
   color: var(--color-slate);
   font-size: 12px;
   font-weight: 500;
 }
 
-.benchmark-field input {
+.benchmark-field label,
+.benchmark-field.locked {
+  display: grid;
+  gap: 4px;
+}
+
+.benchmark-field input,
+.benchmark-field select {
   border: var(--border-std);
   border-radius: var(--radius-sm);
   background: var(--color-white);
   color: var(--color-ink);
   padding: 6px 8px;
-  font-family: var(--font-mono);
   font-size: 12px;
+}
+
+.benchmark-field input {
+  font-family: var(--font-mono);
 }
 
 .criterion-tools {
