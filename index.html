@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Renovation Decision Support Tool</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">LTH renovation readiness</p>
+        <h1>Renovation Decision Support Tool</h1>
+      </div>
+      <div class="actions">
+        <button id="resetButton" class="ghost" type="button">Reset</button>
+        <button id="sampleButton" type="button">Load sample</button>
+      </div>
+    </header>
+
+    <main>
+      <nav class="tabs" aria-label="Workflow">
+        <button class="tab active" data-view="criteria" type="button">Criteria</button>
+        <button class="tab" data-view="alternatives" type="button">Alternatives</button>
+        <button class="tab" data-view="weights" type="button">Weights</button>
+        <button class="tab" data-view="ranking" type="button">Ranking</button>
+      </nav>
+
+      <section id="criteria" class="view active">
+        <div class="section-head">
+          <div>
+            <h2>KPI library and criteria</h2>
+            <p>Use the thesis KPIs as the criteria list, grouped and color-coded by Environmental, Economic, and Social category. C1 and C10 are mandatory LTH readiness gates.</p>
+          </div>
+          <form id="criterionForm" class="inline-form">
+            <input name="name" placeholder="Custom KPI name" required />
+            <input name="unit" placeholder="Unit" required />
+            <select name="pillar" required>
+              <option>Environmental</option>
+              <option>Economic</option>
+              <option>Social</option>
+            </select>
+            <select name="direction" required>
+              <option value="min">Minimize</option>
+              <option value="max">Maximize</option>
+            </select>
+            <button type="submit">Add KPI</button>
+          </form>
+        </div>
+        <div id="criteriaGrid" class="criteria-groups"></div>
+      </section>
+
+      <section id="alternatives" class="view">
+        <div class="section-head">
+          <div>
+            <h2>Alternatives</h2>
+            <p>Enter criterion scores for each renovation strategy.</p>
+          </div>
+          <form id="alternativeForm" class="inline-form compact">
+            <input name="name" placeholder="Alternative name" required />
+            <select name="level" required>
+              <option>Basic</option>
+              <option>Moderate</option>
+              <option>Deep</option>
+            </select>
+            <button type="submit">Add alternative</button>
+          </form>
+        </div>
+        <div class="table-wrap">
+          <table id="scoresTable"></table>
+        </div>
+      </section>
+
+      <section id="weights" class="view">
+        <div class="section-head">
+          <div>
+            <h2>Weights</h2>
+            <p>Select explicit Saaty 1-9 rankings for each comparison, or use Socratic derive to convert stakeholder priorities into a first-pass AHP matrix.</p>
+          </div>
+          <div class="actions">
+            <button id="equalWeightsButton" class="ghost" type="button">Equal weights</button>
+            <button id="socraticButton" type="button">Socratic derive</button>
+          </div>
+        </div>
+
+        <div class="split">
+          <div>
+            <h3>Saaty pairwise ranking</h3>
+            <div id="comparisonList" class="comparison-list"></div>
+          </div>
+          <aside class="panel">
+            <h3>Current weights</h3>
+            <div id="weightBars"></div>
+            <div id="consistency" class="metric"></div>
+            <div class="helper">
+              <strong>How Socratic derive helps</strong>
+              <p>In a workshop, stakeholders often speak in priorities instead of numbers. This helper reads those priorities, boosts matching criteria, then fills the Saaty matrix as a starting point you can review.</p>
+            </div>
+            <label class="stacked">
+              Stakeholder priorities
+              <textarea id="socraticInput" rows="8" placeholder="Describe what matters most in this project: cost, comfort, emissions, nuisance, payback, readiness, or other constraints."></textarea>
+            </label>
+          </aside>
+        </div>
+      </section>
+
+      <section id="ranking" class="view">
+        <div class="section-head">
+          <div>
+            <h2>TOPSIS Ranking</h2>
+            <p>Ranks alternatives using normalized weighted scores, ideal solutions, distances, and closeness index.</p>
+          </div>
+          <button id="rankButton" type="button">Calculate ranking</button>
+        </div>
+        <div id="gateWarnings"></div>
+        <div id="rankingChart" class="ranking-chart"></div>
+        <div class="table-wrap">
+          <table id="rankingTable"></table>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
