@@ -83,36 +83,82 @@ function saveState() {
 }
 
 function normalizeState(candidate) {
-  const criteria = normalizeCriteria(Array.isArray(candidate.criteria) ? candidate.criteria : structuredClone(defaultCriteria));
+  const criterionNormalization = normalizeCriterionIds(normalizeCriteria(Array.isArray(candidate.criteria) ? candidate.criteria : structuredClone(defaultCriteria)));
+  const criteria = criterionNormalization.criteria;
   const legacyComparisons = candidate.comparisons && typeof candidate.comparisons === 'object' ? candidate.comparisons : {};
   const participants = Array.isArray(candidate.participants) && candidate.participants.length
     ? candidate.participants.map((participant, index) => normalizeParticipant(participant, index))
     : [createParticipant('Participant 1', legacyComparisons, candidate.socraticInput || '')];
+  const normalizedParticipants = participants.map((participant) => ({
+    ...participant,
+    comparisons: remapComparisons(participant.comparisons, criterionNormalization.idMap),
+  }));
   const selectedParticipantId = participants.some((participant) => participant.id === candidate.selectedParticipantId)
     ? candidate.selectedParticipantId
-    : participants[0].id;
+    : normalizedParticipants[0].id;
 
   return {
     criteria,
-    alternatives: normalizeAlternatives(Array.isArray(candidate.alternatives) ? candidate.alternatives : structuredClone(sampleAlternatives)),
-    participants,
+    alternatives: normalizeAlternatives(Array.isArray(candidate.alternatives) ? candidate.alternatives : structuredClone(sampleAlternatives), criterionNormalization.idMap),
+    participants: normalizedParticipants,
     selectedParticipantId,
     rankingWeightSource: candidate.rankingWeightSource || 'group',
     excludeBenchmarkFailures: candidate.excludeBenchmarkFailures !== false,
   };
 }
 
-function normalizeAlternatives(alternatives) {
+function normalizeAlternatives(alternatives, criterionIdMap = {}) {
   const normalized = alternatives.map((alternative) => ({
     ...alternative,
     id: alternative.id || createId('alternative'),
     isBaseCase: Boolean(alternative.isBaseCase),
-    scores: alternative.scores || {},
+    scores: remapScoreMap(alternative.scores || {}, criterionIdMap),
   }));
   if (!normalized.some((alternative) => alternative.isBaseCase) && normalized.length) {
     normalized[0].isBaseCase = true;
   }
   return normalized;
+}
+
+function normalizeCriterionIds(criteria) {
+  const used = new Set();
+  const idMap = {};
+  let nextNumber = Math.max(13, ...criteria.map((criterion) => {
+    const match = String(criterion.id || '').match(/^C(\d+)$/i);
+    return match ? Number(match[1]) : 0;
+  }));
+
+  const normalized = criteria.map((criterion) => {
+    const rawId = String(criterion.id || '').trim().toUpperCase();
+    const canKeepId = /^C\d+$/.test(rawId) && !used.has(rawId);
+    const id = canKeepId ? rawId : `C${++nextNumber}`;
+    used.add(id);
+    if (criterion.id !== id) idMap[criterion.id] = id;
+    return {
+      ...criterion,
+      id,
+      name: normalizeLabel(criterion.name) || 'Custom KPI',
+      unit: normalizeLabel(criterion.unit),
+    };
+  });
+
+  return { criteria: normalized, idMap };
+}
+
+function normalizeLabel(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function remapScoreMap(scores, idMap = {}) {
+  return Object.fromEntries(Object.entries(scores).map(([key, value]) => [idMap[key] || key, value]));
+}
+
+function remapComparisons(comparisons, idMap = {}) {
+  return Object.fromEntries(Object.entries(comparisons || {}).flatMap(([key, value]) => {
+    const [left, right] = key.split('|');
+    if (!left || !right) return [];
+    return [[comparisonKey(idMap[left] || left, idMap[right] || right), value]];
+  }));
 }
 
 function normalizeCriteria(criteria) {
@@ -183,6 +229,14 @@ function equalWeights(criteria) {
 
 function comparisonKey(leftId, rightId) {
   return `${leftId}|${rightId}`;
+}
+
+function nextCriterionId() {
+  const maxNumber = Math.max(13, ...state.criteria.map((criterion) => {
+    const match = String(criterion.id || '').match(/^C(\d+)$/i);
+    return match ? Number(match[1]) : 0;
+  }));
+  return `C${maxNumber + 1}`;
 }
 
 function escapeHtml(value) {
@@ -1026,11 +1080,11 @@ document.addEventListener('input', (event) => {
 document.querySelector('#criterionForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  const id = `K${Date.now().toString().slice(-5)}`;
+  const id = nextCriterionId();
   state.criteria.push({
     id,
-    name: data.get('name'),
-    unit: data.get('unit'),
+    name: normalizeLabel(data.get('name')),
+    unit: normalizeLabel(data.get('unit')),
     pillar: data.get('pillar'),
     direction: data.get('direction'),
     benchmarkType: data.get('benchmarkType'),
