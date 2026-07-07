@@ -1008,7 +1008,7 @@ function renderParticipants() {
     const active = participant.id === state.selectedParticipantId ? 'active' : '';
     const name = escapeHtml(participant.name);
     const crText = profile.categoryResults.length
-      ? profile.categoryResults.map((item) => `${item.category.name}: ${Number.isFinite(item.result.cr) ? item.result.cr.toFixed(3) : 'n/a'}`).join(' | ')
+      ? profile.categoryResults.map((item) => `${item.category.name}: ${formatCrStatus(item.result.cr)}`).join(' | ')
       : 'No active categories';
     return `
       <article class="participant-card ${active}" data-participant-card="${participant.id}">
@@ -1026,6 +1026,11 @@ function renderParticipants() {
   }).join('');
 }
 
+function formatCrStatus(cr) {
+  if (!Number.isFinite(cr)) return 'n/a';
+  return `${cr.toFixed(3)} ${cr <= 0.1 ? 'OK' : 'review'}`;
+}
+
 function renderGroupWeights() {
   const summary = document.querySelector('#groupSummary');
   const bars = document.querySelector('#groupWeightBars');
@@ -1034,7 +1039,7 @@ function renderGroupWeights() {
   const group = aggregateGroupWeights();
   summary.innerHTML = `
     <p class="meta">${group.included.length} participant${group.included.length === 1 ? '' : 's'} included - ${group.excludedCount} not included</p>
-    <p class="meta">Aggregation: arithmetic mean per criterion, then one global normalization across all active criteria.</p>
+    <p class="meta">Included means every category has CR <= 0.10. Aggregation uses arithmetic mean per criterion, then one global normalization.</p>
   `;
   bars.innerHTML = activeCriteria().map((criterion) => `
     <div class="bar-row">
@@ -1063,7 +1068,7 @@ function renderComparisons() {
           <tr>
             <td>${escapeHtml(participant.name)}</td>
             ${criteria.map((criterion) => `<td>${((profile.balancedWeights[criterion.id] ?? 0) * 100).toFixed(1)}%</td>`).join('')}
-            <td>${profile.categoryResults.map((item) => `${escapeHtml(item.category.name)} ${Number.isFinite(item.result.cr) ? item.result.cr.toFixed(3) : 'n/a'}`).join('<br>')}</td>
+            <td>${profile.categoryResults.map((item) => `${escapeHtml(item.category.name)} ${formatCrStatus(item.result.cr)}`).join('<br>')}</td>
           </tr>
         `;
       }).join('')}
@@ -1136,8 +1141,7 @@ function renderWeights() {
   const consistency = document.querySelector('#consistency');
   consistency.className = `metric ${profile.complete && profile.consistent ? 'pass' : 'fail'}`;
   consistency.textContent = profile.categoryResults.map((item) => {
-    const cr = Number.isFinite(item.result.cr) ? item.result.cr.toFixed(3) : 'n/a';
-    return `${item.category.name} CR ${cr}`;
+    return `${item.category.name} CR ${formatCrStatus(item.result.cr)}`;
   }).join(' | ');
 
   const participant = selectedParticipant();
@@ -1372,6 +1376,12 @@ document.addEventListener('click', (event) => {
 
   if (event.target.id === 'closeAhpDialog' || event.target.id === 'doneAhpDialog') {
     document.querySelector('#ahpDialog')?.close();
+  }
+
+  if (event.target.id === 'editSelectedAhpButton') {
+    const participant = selectedParticipant();
+    renderAHPDialog(participant);
+    document.querySelector('#ahpDialog')?.showModal();
   }
 
   if (event.target.id === 'openAlternativeDialog') {

@@ -120,12 +120,13 @@
           <div>
             <h2>Weights</h2>
             <p>Collect pairwise judgements within each category for each participant, then combine consistent participant weights for TOPSIS.</p>
+            <p class="meta">CR means consistency ratio. CR ≤ 0.10 is acceptable; CR > 0.10 means the participant should review that category's pairwise judgements.</p>
           </div>
           <div class="actions">
             <button id="addParticipantButton" class="ghost" type="button">Add participant</button>
             <button id="duplicateParticipantButton" class="ghost" type="button">Duplicate</button>
-            <button id="equalWeightsButton" class="ghost" type="button">Equal weights</button>
-            <button id="socraticButton" type="button">Socratic derive</button>
+            <button id="equalWeightsButton" class="ghost" type="button">Set selected equal</button>
+            <button id="socraticButton" type="button">Draft selected from text</button>
           </div>
         </div>
 
@@ -135,7 +136,8 @@
             <div id="participantList" class="participant-list"></div>
           </div>
           <div class="panel">
-            <h3>Group weights</h3>
+            <h3>Balanced TOPSIS weights</h3>
+            <p class="meta">Final group weight vector used by TOPSIS. Only participants with acceptable CR in every category are included.</p>
             <div id="groupSummary"></div>
             <div id="groupWeightBars"></div>
           </div>
@@ -143,21 +145,24 @@
 
         <div class="split">
           <div>
-            <h3>Participant comparison</h3>
+            <h3>Participant weight audit</h3>
+            <p class="meta">This table shows each participant's normalized weights, the arithmetic average, and the final balanced row used for group ranking.</p>
             <div class="table-wrap">
               <table id="participantComparisonTable"></table>
             </div>
           </div>
           <aside class="panel">
-            <h3>Current weights</h3>
+            <h3>Selected participant</h3>
+            <p class="meta">Use this panel to review or revise the currently selected participant's category-level AHP inputs.</p>
+            <button id="editSelectedAhpButton" class="ghost" type="button">Edit selected pairwise</button>
             <div id="weightBars"></div>
             <div id="consistency" class="metric"></div>
             <div class="helper">
               <strong>How Socratic derive helps</strong>
-              <p>In a workshop, stakeholders often speak in priorities instead of numbers. This helper reads those priorities, boosts matching criteria, then fills the Saaty matrix as a starting point you can review.</p>
+              <p>It reads the selected participant's written priorities and creates a first-pass set of within-category pairwise judgements. Review the result with Edit selected pairwise before accepting it.</p>
             </div>
             <label class="stacked">
-              Stakeholder priorities
+              Selected participant priorities
               <textarea id="socraticInput" rows="8" placeholder="Describe what matters most in this project: cost, comfort, emissions, nuisance, payback, readiness, or other constraints."></textarea>
             </label>
           </aside>

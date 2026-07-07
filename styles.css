@@ -627,6 +627,10 @@ td input {
   width: 170px;
 }
 
+.panel > .ghost {
+  margin-bottom: 12px;
+}
+
 .comparison-list {
   display: grid;
   gap: 10px;
