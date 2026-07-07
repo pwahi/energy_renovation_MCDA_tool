@@ -244,7 +244,7 @@ function benchmarkFromLegacy(criterion, defaultCriterion) {
   }
 
   const raw = String(criterion.benchmark ?? '').trim();
-  if (!raw || raw === '-') return { benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: false };
+  if (!raw || raw === '-' || /^no benchmark$/i.test(raw)) return { benchmarkType: 'none', benchmarkValue: '', benchmarkLocked: false };
   if (isRelativeBenchmark(raw)) {
     return {
       benchmarkType: /higher|above|more/i.test(raw) ? 'higher-than-base' : 'lower-than-base',
@@ -405,17 +405,12 @@ function renderCriteria() {
 }
 
 function renderBenchmarkControls(criterion) {
+  const value = criterion.benchmarkType === 'none' ? '' : benchmarkDisplay(criterion);
   return `
-    <div class="benchmark-field">
-      <label>
-        Benchmark type
-        <select data-benchmark-type="${criterion.id}">
-          ${BENCHMARK_TYPES.map((type) => `<option value="${type.value}" ${criterion.benchmarkType === type.value ? 'selected' : ''}>${type.label}</option>`).join('')}
-        </select>
-      </label>
-      <div class="meta"><strong>${escapeHtml(benchmarkDisplay(criterion))}</strong></div>
-      ${benchmarkNeedsValue(criterion.benchmarkType) ? renderBenchmarkValueControl(criterion) : ''}
-    </div>
+    <label class="benchmark-field">
+      Benchmark
+      <input data-benchmark-text="${criterion.id}" value="${escapeHtml(value)}" placeholder="e.g. <= 1.40, Label B or better" />
+    </label>
   `;
 }
 
@@ -883,6 +878,21 @@ document.addEventListener('change', (event) => {
     const criterion = state.criteria.find((item) => item.id === event.target.dataset.benchmarkValue);
     if (criterion) {
       criterion.benchmarkValue = event.target.value.trim();
+      criterion.benchmark = benchmarkDisplay(criterion);
+    }
+    render();
+  }
+
+  if (event.target.dataset.benchmarkText) {
+    const criterion = state.criteria.find((item) => item.id === event.target.dataset.benchmarkText);
+    if (criterion) {
+      const parsed = benchmarkFromLegacy({
+        benchmark: event.target.value,
+        direction: criterion.direction,
+        name: criterion.name,
+      });
+      criterion.benchmarkType = parsed.benchmarkType;
+      criterion.benchmarkValue = parsed.benchmarkValue;
       criterion.benchmark = benchmarkDisplay(criterion);
     }
     render();
