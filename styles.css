@@ -803,6 +803,18 @@ input[type="range"]::-moz-range-thumb {
   background: var(--color-cobalt);
 }
 
+.bar-fill.environmental {
+  background: var(--pillar-env-text);
+}
+
+.bar-fill.economic {
+  background: var(--pillar-eco-text);
+}
+
+.bar-fill.social {
+  background: var(--pillar-soc-text);
+}
+
 .metric {
   display: inline-block;
   width: 100%;

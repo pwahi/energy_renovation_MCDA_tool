@@ -779,10 +779,10 @@ function renderGroupWeights() {
     <p class="meta">Aggregation: geometric mean of consistent AHP profiles.</p>
   `;
   bars.innerHTML = activeCriteria().map((criterion) => `
-    <div class="bar-row">
+    <div class="bar-row ${criterion.pillar.toLowerCase()}">
       <div>
         <div>${criterion.id} ${criterion.name}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${(group.weights[criterion.id] ?? 0) * 100}%"></div></div>
+        <div class="bar-track"><div class="bar-fill ${criterion.pillar.toLowerCase()}" style="width:${(group.weights[criterion.id] ?? 0) * 100}%"></div></div>
       </div>
       <strong>${(((group.weights[criterion.id] ?? 0) * 100)).toFixed(1)}%</strong>
     </div>
@@ -1097,10 +1097,10 @@ function renderGroupWeights() {
     <p class="meta">Included means every category has CR <= ${crThreshold().toFixed(2)}. Aggregation uses arithmetic mean per criterion, then one global normalization.</p>
   `;
   bars.innerHTML = activeCriteria().map((criterion) => `
-    <div class="bar-row">
+    <div class="bar-row ${criterion.pillar.toLowerCase()}">
       <div>
         <div>${criterion.id} ${criterion.name}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${(group.weights[criterion.id] ?? 0) * 100}%"></div></div>
+        <div class="bar-track"><div class="bar-fill ${criterion.pillar.toLowerCase()}" style="width:${(group.weights[criterion.id] ?? 0) * 100}%"></div></div>
       </div>
       <strong>${(((group.weights[criterion.id] ?? 0) * 100)).toFixed(1)}%</strong>
     </div>
@@ -1209,15 +1209,17 @@ function updateDialogCategoryFeedback(participant, categoryId) {
 function renderWeights() {
   const profile = participantAHPProfile(selectedParticipant());
   const bars = document.querySelector('#weightBars');
-  bars.innerHTML = activeCriteria().map((criterion) => `
-    <div class="bar-row">
-      <div>
-        <div>${criterion.id} ${criterion.name}</div>
-        <div class="bar-track"><div class="bar-fill" style="width:${(profile.balancedWeights[criterion.id] ?? 0) * 100}%"></div></div>
+  if (bars) {
+    bars.innerHTML = activeCriteria().map((criterion) => `
+      <div class="bar-row ${criterion.pillar.toLowerCase()}">
+        <div>
+          <div>${criterion.id} ${criterion.name}</div>
+          <div class="bar-track"><div class="bar-fill ${criterion.pillar.toLowerCase()}" style="width:${(profile.balancedWeights[criterion.id] ?? 0) * 100}%"></div></div>
+        </div>
+        <strong>${(((profile.balancedWeights[criterion.id] ?? 0) * 100)).toFixed(1)}%</strong>
       </div>
-      <strong>${(((profile.balancedWeights[criterion.id] ?? 0) * 100)).toFixed(1)}%</strong>
-    </div>
-  `).join('');
+    `).join('');
+  }
 
   const consistency = document.querySelector('#consistency');
   consistency.className = `metric ${profile.complete && profile.consistent ? 'pass' : 'fail'}`;
