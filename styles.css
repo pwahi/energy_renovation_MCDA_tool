@@ -235,6 +235,67 @@ td input,
   min-width: 220px;
 }
 
+.alternative-form {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.alternative-form-head {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 180px auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.alternative-form-head label,
+.alternative-field {
+  display: grid;
+  gap: 6px;
+  color: var(--color-slate);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.alternative-form input,
+.alternative-form select {
+  width: 100%;
+  border: var(--border-std);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-ink);
+  padding: 8px 12px;
+}
+
+.alternative-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.alternative-field {
+  padding: 10px;
+  border: var(--border-std);
+  border-left: var(--border-accent-left);
+  border-radius: var(--radius-sm);
+}
+
+.alternative-field.environmental {
+  background: var(--pillar-env-bg);
+}
+
+.alternative-field.economic {
+  background: var(--pillar-eco-bg);
+}
+
+.alternative-field.social {
+  background: var(--pillar-soc-bg);
+}
+
+.alternative-field input {
+  font-family: var(--font-mono);
+}
+
 .criteria-groups {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -775,7 +836,8 @@ input[type="range"]::-moz-range-thumb {
   }
 
   .split,
-  .criteria-groups {
+  .criteria-groups,
+  .alternative-form-head {
     grid-template-columns: 1fr;
   }
 

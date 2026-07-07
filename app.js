@@ -442,6 +442,7 @@ function evaluateLegacyBenchmark(score, criterion, alternative = null) {
 
 function render() {
   renderCriteria();
+  renderAlternativeForm();
   renderScores();
   renderParticipants();
   renderComparisons();
@@ -449,6 +450,29 @@ function render() {
   renderGroupWeights();
   renderRanking();
   saveState();
+}
+
+function renderAlternativeForm() {
+  const fields = document.querySelector('#alternativeCriteriaFields');
+  if (!fields) return;
+  const criteria = activeCriteria();
+  fields.innerHTML = criteria.length
+    ? criteria.map((criterion) => `
+      <label class="alternative-field ${criterion.pillar.toLowerCase()}">
+        <span>
+          <strong>${escapeHtml(criterion.id)} ${escapeHtml(criterion.name)}</strong>
+          <span class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'}</span>
+        </span>
+        <input name="score-${escapeHtml(criterion.id)}" data-new-score="${escapeHtml(criterion.id)}" placeholder="${escapeHtml(alternativeScorePlaceholder(criterion))}" required />
+      </label>
+    `).join('')
+    : '<div class="warning">Activate at least one criterion before adding alternatives.</div>';
+}
+
+function alternativeScorePlaceholder(criterion) {
+  if (criterion.id === 'C2' || /label/i.test(criterion.name)) return 'e.g. B, A, A++';
+  if (criterion.unit) return `Enter ${criterion.unit}`;
+  return 'Enter performance value';
 }
 
 function renderCriteria() {
@@ -1105,7 +1129,17 @@ document.querySelector('#criterionForm').addEventListener('submit', (event) => {
 document.querySelector('#alternativeForm').addEventListener('submit', (event) => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
-  state.alternatives.push({ id: createId('alternative'), name: data.get('name'), level: data.get('level'), isBaseCase: false, scores: {} });
+  const scores = {};
+  for (const criterion of activeCriteria()) {
+    scores[criterion.id] = String(data.get(`score-${criterion.id}`) || '').trim();
+  }
+  state.alternatives.push({
+    id: createId('alternative'),
+    name: normalizeLabel(data.get('name')),
+    level: data.get('level'),
+    isBaseCase: false,
+    scores,
+  });
   event.currentTarget.reset();
   render();
 });

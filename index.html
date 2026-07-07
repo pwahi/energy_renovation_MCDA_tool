@@ -69,18 +69,27 @@
         <div class="section-head">
           <div>
             <h2>Alternatives</h2>
-            <p>Enter criterion scores for each renovation strategy.</p>
+            <p>Add each renovation strategy by entering its performance against the active criteria, then review or edit the scores in the table.</p>
           </div>
-          <form id="alternativeForm" class="inline-form compact">
-            <input name="name" placeholder="Alternative name" required />
-            <select name="level" required>
-              <option>Basic</option>
-              <option>Moderate</option>
-              <option>Deep</option>
-            </select>
-            <button type="submit">Add alternative</button>
-          </form>
         </div>
+        <form id="alternativeForm" class="panel alternative-form">
+          <div class="alternative-form-head">
+            <label>
+              Alternative name
+              <input name="name" placeholder="e.g. Moderate envelope upgrade" required />
+            </label>
+            <label>
+              Renovation level
+              <select name="level" required>
+                <option>Basic</option>
+                <option>Moderate</option>
+                <option>Deep</option>
+              </select>
+            </label>
+            <button type="submit">Add alternative</button>
+          </div>
+          <div id="alternativeCriteriaFields" class="alternative-fields"></div>
+        </form>
         <div class="table-wrap">
           <table id="scoresTable"></table>
         </div>
