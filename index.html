@@ -69,30 +69,45 @@
         <div class="section-head">
           <div>
             <h2>Alternatives</h2>
-            <p>Add each renovation strategy by entering its performance against the active criteria, then review or edit the scores in the table.</p>
+            <p>Review and edit renovation strategies across all criteria. Active criteria are used for weighting and ranking; inactive criteria remain available for data entry.</p>
+          </div>
+          <div class="actions">
+            <button id="openAlternativeDialog" type="button">Add new alternative</button>
           </div>
         </div>
-        <form id="alternativeForm" class="panel alternative-form">
-          <div class="alternative-form-head">
-            <label>
-              Alternative name
-              <input name="name" placeholder="e.g. Moderate envelope upgrade" required />
-            </label>
-            <label>
-              Renovation level
-              <select name="level" required>
-                <option>Basic</option>
-                <option>Moderate</option>
-                <option>Deep</option>
-              </select>
-            </label>
-            <button type="submit">Add alternative</button>
-          </div>
-          <div id="alternativeCriteriaFields" class="alternative-fields"></div>
-        </form>
         <div class="table-wrap">
           <table id="scoresTable"></table>
         </div>
+        <dialog id="alternativeDialog" class="modal">
+          <form id="alternativeForm" class="alternative-form" method="dialog">
+            <div class="modal-head">
+              <div>
+                <h3>Add new alternative</h3>
+                <p class="meta">Enter the performance values for each criterion.</p>
+              </div>
+              <button id="closeAlternativeDialog" class="ghost" type="button">Cancel</button>
+            </div>
+            <div class="alternative-form-head">
+              <label>
+                Alternative name
+                <input name="name" placeholder="e.g. Moderate envelope upgrade" required />
+              </label>
+              <label>
+                Renovation level
+                <select name="level" required>
+                  <option>Basic</option>
+                  <option>Moderate</option>
+                  <option>Deep</option>
+                </select>
+              </label>
+            </div>
+            <div id="alternativeCriteriaFields" class="alternative-fields"></div>
+            <div class="modal-actions">
+              <button id="cancelAlternativeDialog" class="ghost" type="button">Cancel</button>
+              <button type="submit">Add alternative</button>
+            </div>
+          </form>
+        </dialog>
       </section>
 
       <section id="weights" class="view">

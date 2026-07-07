@@ -455,13 +455,13 @@ function render() {
 function renderAlternativeForm() {
   const fields = document.querySelector('#alternativeCriteriaFields');
   if (!fields) return;
-  const criteria = activeCriteria();
+  const criteria = state.criteria;
   fields.innerHTML = criteria.length
     ? criteria.map((criterion) => `
       <label class="alternative-field ${criterion.pillar.toLowerCase()}">
         <span>
           <strong>${escapeHtml(criterion.id)} ${escapeHtml(criterion.name)}</strong>
-          <span class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'}</span>
+          <span class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'}${criterion.active ? '' : ' | not used in ranking'}</span>
         </span>
         <input name="score-${escapeHtml(criterion.id)}" data-new-score="${escapeHtml(criterion.id)}" placeholder="${escapeHtml(alternativeScorePlaceholder(criterion))}" required />
       </label>
@@ -556,7 +556,7 @@ function renderBenchmarkValueControl(criterion) {
 
 function renderScores() {
   const table = document.querySelector('#scoresTable');
-  const criteria = activeCriteria();
+  const criteria = state.criteria;
   const headers = ['Alternative', 'Level', 'Base case', ...criteria.map((criterion) => `${criterion.id} ${criterion.name}`), ''];
   table.innerHTML = `
     <thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead>
@@ -574,7 +574,7 @@ function renderScores() {
           ${criteria.map((criterion) => `
             <td>
               <input data-score-alt="${alternative.id}" data-score-criterion="${criterion.id}" value="${escapeHtml(alternative.scores[criterion.id] ?? '')}" />
-              <div class="meta">${criterion.unit}</div>
+              <div class="meta">${criterion.unit}${criterion.active ? '' : ' | not ranked'}</div>
             </td>
           `).join('')}
           <td><button class="ghost delete" type="button" data-delete-alt="${alternative.id}" ${alternative.isBaseCase ? 'disabled' : ''}>Delete</button></td>
@@ -976,6 +976,19 @@ document.addEventListener('click', (event) => {
     if (state.selectedParticipantId === deleteParticipant) state.selectedParticipantId = state.participants[0].id;
     render();
   }
+
+  if (event.target.id === 'openAlternativeDialog') {
+    const dialog = document.querySelector('#alternativeDialog');
+    if (dialog) {
+      renderAlternativeForm();
+      dialog.showModal();
+    }
+  }
+
+  if (event.target.id === 'closeAlternativeDialog' || event.target.id === 'cancelAlternativeDialog') {
+    const dialog = document.querySelector('#alternativeDialog');
+    if (dialog) dialog.close();
+  }
 });
 
 document.addEventListener('change', (event) => {
@@ -1130,7 +1143,7 @@ document.querySelector('#alternativeForm').addEventListener('submit', (event) =>
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const scores = {};
-  for (const criterion of activeCriteria()) {
+  for (const criterion of state.criteria) {
     scores[criterion.id] = String(data.get(`score-${criterion.id}`) || '').trim();
   }
   state.alternatives.push({
@@ -1141,6 +1154,7 @@ document.querySelector('#alternativeForm').addEventListener('submit', (event) =>
     scores,
   });
   event.currentTarget.reset();
+  document.querySelector('#alternativeDialog')?.close();
   render();
 });
 
