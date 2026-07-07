@@ -44,7 +44,7 @@ function createId(prefix = 'id') {
 const sampleAlternatives = [
   { id: createId('alternative'), name: 'Existing HT supply baseline', level: 'Base case', isBaseCase: true, scores: { C1: 80, C2: 'C', C4: 0, C5: 0, C6: 0, C8: 84000, C9: 0, C10: 140, C12: 0 } },
   { id: createId('alternative'), name: 'Basic insulation package', level: 'Basic', isBaseCase: false, scores: { C1: 70, C2: 'B', C4: 15, C5: 420, C6: 18000, C8: 62000, C9: 17, C10: 120, C12: 620 } },
-  { id: createId('alternative'), name: 'Moderate envelope upgrade', level: 'Moderate', isBaseCase: false, scores: { C1: 48, C2: 'A', C4: 32, C5: 720, C6: 36000, C8: 76000, C9: 15, C10: 72, C12: 980 } },
+  { id: createId('alternative'), name: 'Medium envelope upgrade', level: 'Medium', isBaseCase: false, scores: { C1: 48, C2: 'A', C4: 32, C5: 720, C6: 36000, C8: 76000, C9: 15, C10: 72, C12: 980 } },
   { id: createId('alternative'), name: 'Deep retrofit ready', level: 'Deep', isBaseCase: false, scores: { C1: 32, C2: 'A++', C4: 58, C5: 1080, C6: 64000, C8: 91000, C9: 19, C10: 28, C12: 1410 } },
 ];
 
@@ -111,6 +111,8 @@ function normalizeAlternatives(alternatives, criterionIdMap = {}) {
   const normalized = alternatives.map((alternative) => ({
     ...alternative,
     id: alternative.id || createId('alternative'),
+    name: normalizeLabel(alternative.name) || 'Unnamed alternative',
+    level: normalizeInterventionLevel(alternative.level),
     isBaseCase: Boolean(alternative.isBaseCase),
     scores: remapScoreMap(alternative.scores || {}, criterionIdMap),
   }));
@@ -147,6 +149,12 @@ function normalizeCriterionIds(criteria) {
 
 function normalizeLabel(value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeInterventionLevel(value) {
+  const label = normalizeLabel(value);
+  if (/^moderate$/i.test(label)) return 'Medium';
+  return label || 'Basic';
 }
 
 function remapScoreMap(scores, idMap = {}) {
@@ -563,14 +571,14 @@ function renderBenchmarkValueControl(criterion) {
 function renderScores() {
   const table = document.querySelector('#scoresTable');
   const criteria = activeCriteria();
-  const headers = ['Alternative', 'Level', 'Base case', ...criteria.map((criterion) => `${criterion.id} ${criterion.name}`), ''];
+  const headers = ['Alternative name', 'Intervention level (scenario)', 'Base case', ...criteria.map((criterion) => `${criterion.id} ${criterion.name}`), ''];
   table.innerHTML = `
     <thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead>
     <tbody>
       ${state.alternatives.map((alternative) => `
         <tr class="${alternative.isBaseCase ? 'base-case-row' : ''}">
-          <td><input data-alt-name="${alternative.id}" value="${alternative.name}" /></td>
-          <td>${alternative.level}</td>
+          <td><input data-alt-name="${alternative.id}" value="${escapeHtml(alternative.name)}" /></td>
+          <td><input data-alt-level="${alternative.id}" list="interventionLevels" value="${escapeHtml(alternative.level)}" /></td>
           <td>
             <label class="switch">
               <input type="radio" name="baseAlternative" data-base-alt="${alternative.id}" ${alternative.isBaseCase ? 'checked' : ''} />
@@ -1060,7 +1068,13 @@ document.addEventListener('change', (event) => {
 
   if (event.target.dataset.altName) {
     const alternative = state.alternatives.find((item) => item.id === event.target.dataset.altName);
-    if (alternative) alternative.name = event.target.value;
+    if (alternative) alternative.name = normalizeLabel(event.target.value) || 'Unnamed alternative';
+    render();
+  }
+
+  if (event.target.dataset.altLevel) {
+    const alternative = state.alternatives.find((item) => item.id === event.target.dataset.altLevel);
+    if (alternative) alternative.level = normalizeInterventionLevel(event.target.value);
     render();
   }
 
@@ -1154,8 +1168,8 @@ document.querySelector('#alternativeForm').addEventListener('submit', (event) =>
   }
   state.alternatives.push({
     id: createId('alternative'),
-    name: normalizeLabel(data.get('name')),
-    level: data.get('level'),
+    name: normalizeLabel(data.get('name')) || 'Unnamed alternative',
+    level: normalizeInterventionLevel(data.get('level')),
     isBaseCase: false,
     scores,
   });
