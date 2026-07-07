@@ -455,13 +455,13 @@ function render() {
 function renderAlternativeForm() {
   const fields = document.querySelector('#alternativeCriteriaFields');
   if (!fields) return;
-  const criteria = state.criteria;
+  const criteria = activeCriteria();
   fields.innerHTML = criteria.length
     ? criteria.map((criterion) => `
       <label class="alternative-field ${criterion.pillar.toLowerCase()}">
         <span>
           <strong>${escapeHtml(criterion.id)} ${escapeHtml(criterion.name)}</strong>
-          <span class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'}${criterion.active ? '' : ' | not used in ranking'}</span>
+          <span class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'}</span>
         </span>
         <input name="score-${escapeHtml(criterion.id)}" data-new-score="${escapeHtml(criterion.id)}" placeholder="${escapeHtml(alternativeScorePlaceholder(criterion))}" required />
       </label>
@@ -556,7 +556,7 @@ function renderBenchmarkValueControl(criterion) {
 
 function renderScores() {
   const table = document.querySelector('#scoresTable');
-  const criteria = state.criteria;
+  const criteria = activeCriteria();
   const headers = ['Alternative', 'Level', 'Base case', ...criteria.map((criterion) => `${criterion.id} ${criterion.name}`), ''];
   table.innerHTML = `
     <thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead>
@@ -574,7 +574,7 @@ function renderScores() {
           ${criteria.map((criterion) => `
             <td>
               <input data-score-alt="${alternative.id}" data-score-criterion="${criterion.id}" value="${escapeHtml(alternative.scores[criterion.id] ?? '')}" />
-              <div class="meta">${criterion.unit}${criterion.active ? '' : ' | not ranked'}</div>
+              <div class="meta">${criterion.unit}</div>
             </td>
           `).join('')}
           <td><button class="ghost delete" type="button" data-delete-alt="${alternative.id}" ${alternative.isBaseCase ? 'disabled' : ''}>Delete</button></td>
@@ -1143,7 +1143,7 @@ document.querySelector('#alternativeForm').addEventListener('submit', (event) =>
   event.preventDefault();
   const data = new FormData(event.currentTarget);
   const scores = {};
-  for (const criterion of state.criteria) {
+  for (const criterion of activeCriteria()) {
     scores[criterion.id] = String(data.get(`score-${criterion.id}`) || '').trim();
   }
   state.alternatives.push({
