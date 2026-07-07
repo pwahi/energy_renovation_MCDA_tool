@@ -138,7 +138,6 @@
           <div class="actions">
             <button id="addParticipantButton" class="ghost" type="button">Add participant</button>
             <button id="duplicateParticipantButton" class="ghost" type="button">Duplicate</button>
-            <button id="equalWeightsButton" class="ghost" type="button">Set selected equal</button>
           </div>
         </div>
 
@@ -153,12 +152,6 @@
             <div id="groupSummary"></div>
             <div id="groupWeightBars"></div>
           </div>
-          <aside class="panel">
-            <h3>Selected participant</h3>
-            <p class="meta">Review or revise the currently selected participant's category-level AHP inputs.</p>
-            <button id="editSelectedAhpButton" class="ghost" type="button">Edit selected pairwise</button>
-            <div id="consistency" class="metric"></div>
-          </aside>
         </div>
 
         <div class="audit-section">
@@ -196,7 +189,6 @@
               Weight source
               <select id="weightSourceSelect">
                 <option value="group">Aggregated group weights</option>
-                <option value="participant">Selected participant</option>
                 <option value="equal">Equal fallback</option>
               </select>
             </label>

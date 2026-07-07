@@ -127,7 +127,7 @@ function normalizeState(candidate) {
     alternatives: normalizeAlternatives(Array.isArray(candidate.alternatives) ? candidate.alternatives : structuredClone(sampleAlternatives), criterionNormalization.idMap),
     participants: normalizedParticipants,
     selectedParticipantId,
-    rankingWeightSource: candidate.rankingWeightSource || 'group',
+    rankingWeightSource: candidate.rankingWeightSource === 'equal' ? 'equal' : 'group',
     excludeBenchmarkFailures: candidate.excludeBenchmarkFailures !== false,
     crThreshold: normalizeCrThreshold(candidate.crThreshold),
     weightMode: candidate.weightMode === 'equal' ? 'equal' : 'participant',
@@ -911,8 +911,10 @@ function renderWeights() {
   `).join('');
 
   const consistency = document.querySelector('#consistency');
-  consistency.className = `metric ${cr <= 0.1 ? 'pass' : 'fail'}`;
-  consistency.textContent = `Consistency ratio: ${Number.isFinite(cr) ? cr.toFixed(3) : 'n/a'} (${cr <= 0.1 ? 'pass' : 'review needed'})`;
+  if (consistency) {
+    consistency.className = `metric ${cr <= 0.1 ? 'pass' : 'fail'}`;
+    consistency.textContent = `Consistency ratio: ${Number.isFinite(cr) ? cr.toFixed(3) : 'n/a'} (${cr <= 0.1 ? 'pass' : 'review needed'})`;
+  }
 
 }
 
@@ -1232,10 +1234,12 @@ function renderWeights() {
   }
 
   const consistency = document.querySelector('#consistency');
-  consistency.className = `metric ${profile.complete && profile.consistent ? 'pass' : 'fail'}`;
-  consistency.textContent = profile.categoryResults.map((item) => {
-    return `${item.category.name} CR ${formatCrStatus(item.result.cr)}`;
-  }).join(' | ');
+  if (consistency) {
+    consistency.className = `metric ${profile.complete && profile.consistent ? 'pass' : 'fail'}`;
+    consistency.textContent = profile.categoryResults.map((item) => {
+      return `${item.category.name} CR ${formatCrStatus(item.result.cr)}`;
+    }).join(' | ');
+  }
 
 }
 
@@ -1257,17 +1261,16 @@ function rankingWeightContext() {
     return { weights: equalWeights(criteria), label: 'Equal fallback weights' };
   }
 
-  if (state.rankingWeightSource === 'participant') {
-    const participant = selectedParticipant();
-    return { weights: participantAHPProfile(participant).balancedWeights, label: `${escapeHtml(participant.name)} weights` };
-  }
-
   const group = aggregateGroupWeights();
   if (group.included.length) {
     return { weights: group.weights, label: `Aggregated group weights (${group.included.length} consistent participant${group.included.length === 1 ? '' : 's'})` };
   }
 
   return { weights: equalWeights(criteria), label: 'Equal fallback weights (no consistent participant profiles yet)' };
+}
+
+function formatPercentComma(value) {
+  return `${(value * 100).toFixed(2).replace('.', ',')}%`;
 }
 
 function calculateTopsis() {
@@ -1304,6 +1307,104 @@ function calculateTopsis() {
   }).sort((a, b) => b.closeness - a.closeness);
 }
 
+function topsisResultsToChartData(results) {
+  return results.map((result, index) => ({
+    name: result.alternative.name,
+    siPlus: result.dPlus,
+    siMinus: result.dMinus,
+    ci: result.closeness,
+    rank: index + 1,
+  }));
+}
+
+function renderProximityMap(data) {
+  if (!data.length) return '';
+  const width = 680;
+  const height = 420;
+  const margin = { top: 54, right: 34, bottom: 74, left: 74 };
+  const plotWidth = width - margin.left - margin.right;
+  const plotHeight = height - margin.top - margin.bottom;
+  const siPlusValues = data.map((item) => item.siPlus);
+  const siMinusValues = data.map((item) => item.siMinus);
+  const xMin = Math.min(...siPlusValues);
+  const xMax = Math.max(...siPlusValues);
+  const yMin = Math.min(...siMinusValues);
+  const yMax = Math.max(...siMinusValues);
+  const xPad = (xMax - xMin || 1) * 0.12;
+  const yPad = (yMax - yMin || 1) * 0.12;
+  const xDomainMin = Math.max(0, xMin - xPad);
+  const xDomainMax = xMax + xPad;
+  const yDomainMin = Math.max(0, yMin - yPad);
+  const yDomainMax = yMax + yPad;
+  const xScale = (value) => margin.left + ((value - xDomainMin) / (xDomainMax - xDomainMin || 1)) * plotWidth;
+  const yScale = (value) => margin.top + (1 - ((value - yDomainMin) / (yDomainMax - yDomainMin || 1))) * plotHeight;
+  const topThree = (item) => item.rank <= 3;
+  const points = data.map((item) => {
+    const fill = topThree(item) ? '#C06800' : '#E8AF73';
+    const text = topThree(item) ? '#FBEFE3' : '#7A4A1E';
+    return `
+      <g class="proximity-point">
+        <circle cx="${xScale(item.siPlus).toFixed(2)}" cy="${yScale(item.siMinus).toFixed(2)}" r="16" fill="${fill}"></circle>
+        <text x="${xScale(item.siPlus).toFixed(2)}" y="${(yScale(item.siMinus) + 4).toFixed(2)}" text-anchor="middle" fill="${text}">${item.rank}</text>
+        <title>${escapeHtml(item.name)}: Si+ ${item.siPlus.toFixed(4)}, Si- ${item.siMinus.toFixed(4)}, Ci ${formatPercentComma(item.ci)}</title>
+      </g>
+    `;
+  }).join('');
+
+  return `
+    <section class="chart-card proximity-card">
+      <div class="chart-accent"></div>
+      <div>
+        <h3>PIS/NIS proximity map</h3>
+        <svg class="proximity-map" viewBox="0 0 ${width} ${height}" role="img" aria-label="PIS and NIS proximity map">
+          <line x1="${margin.left}" y1="${margin.top + plotHeight}" x2="${margin.left + plotWidth}" y2="${margin.top + plotHeight}" class="chart-axis"></line>
+          <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + plotHeight}" class="chart-axis"></line>
+          <text x="${margin.left + plotWidth / 2}" y="${height - 24}" text-anchor="middle" class="chart-caption">Distance to ideal, Si+ (lower is better) →</text>
+          <text x="${margin.left}" y="${height - 42}" class="chart-caption">Numbers show final rank</text>
+          <text x="22" y="${margin.top + plotHeight / 2}" transform="rotate(-90 22 ${margin.top + plotHeight / 2})" text-anchor="middle" class="chart-caption">Distance from anti-ideal, Si- (higher is better)</text>
+          <g class="reference-marker" transform="translate(${margin.left + 18} ${margin.top + 18})">
+            <rect x="-7" y="-7" width="14" height="14" transform="rotate(45)" fill="#7F7F7F"></rect>
+            <text x="14" y="4" class="chart-caption">PIS (ideal)</text>
+          </g>
+          <g class="reference-marker" transform="translate(${margin.left + plotWidth - 18} ${margin.top + plotHeight - 18})">
+            <rect x="-7" y="-7" width="14" height="14" transform="rotate(45)" fill="#7F7F7F"></rect>
+            <text x="-112" y="4" class="chart-caption">NIS (anti-ideal)</text>
+          </g>
+          ${points}
+        </svg>
+      </div>
+    </section>
+  `;
+}
+
+function renderRankingBarChart(data) {
+  if (!data.length) return '';
+  const sorted = [...data].sort((a, b) => a.rank - b.rank);
+  return `
+    <section class="chart-card ranking-bars-card">
+      <div class="chart-accent"></div>
+      <div>
+        <h3>Ranking chart</h3>
+        <div class="ranking-bars">
+          ${sorted.map((item) => {
+            const isTop = item.rank <= 3;
+            return `
+              <div class="ranking-bar-row">
+                <div class="ranking-y-label">${escapeHtml(item.name)}</div>
+                <div class="ranking-bar-track">
+                  <div class="ranking-bar-fill ${isTop ? 'top-ranked' : ''}" style="width:${Math.max(0, Math.min(100, item.ci * 100)).toFixed(2)}%">
+                    <span>${formatPercentComma(item.ci)}</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderRanking() {
   const results = calculateTopsis();
   const table = document.querySelector('#rankingTable');
@@ -1321,20 +1422,13 @@ function renderRanking() {
     notice.innerHTML = `<strong>Ranking weight source</strong><p>${context.label}</p>`;
   }
 
-  chart.innerHTML = results.length
-    ? results.map((result, index) => `
-      <div class="rank-bar ${result.benchmarkFailures.length ? 'benchmark-fail' : ''}">
-        <div class="rank-name">${index + 1}. ${escapeHtml(result.alternative.name)}</div>
-        <div class="rank-track">
-          <div class="rank-fill" style="width:${Math.max(3, result.closeness * 100)}%"></div>
-        </div>
-        <div class="rank-score">${(result.closeness * 100).toFixed(1)}%</div>
-      </div>
-    `).join('')
+  const chartData = topsisResultsToChartData(results);
+  chart.innerHTML = chartData.length
+    ? `<div class="ranking-visuals">${renderProximityMap(chartData)}${renderRankingBarChart(chartData)}</div>`
     : '<div class="warning">Enter complete scores for at least one alternative before ranking.</div>';
   table.innerHTML = `
     <thead>
-      <tr><th>Rank</th><th>Alternative</th><th>Level</th><th>D+</th><th>D-</th><th>Closeness</th></tr>
+      <tr><th>Rank</th><th>Alternative</th><th>Level</th><th>Si+</th><th>Si-</th><th>Ci</th></tr>
     </thead>
     <tbody>
       ${results.map((result, index) => `
@@ -1411,12 +1505,6 @@ document.addEventListener('click', (event) => {
 
   if (event.target.id === 'closeAhpDialog' || event.target.id === 'doneAhpDialog') {
     document.querySelector('#ahpDialog')?.close();
-  }
-
-  if (event.target.id === 'editSelectedAhpButton') {
-    const participant = selectedParticipant();
-    renderAHPDialog(participant);
-    document.querySelector('#ahpDialog')?.showModal();
   }
 
   if (event.target.id === 'openAlternativeDialog') {
@@ -1640,19 +1728,6 @@ document.querySelector('#alternativeForm').addEventListener('submit', (event) =>
   });
   event.currentTarget.reset();
   document.querySelector('#alternativeDialog')?.close();
-  render();
-});
-
-document.querySelector('#equalWeightsButton').addEventListener('click', () => {
-  const participant = selectedParticipant();
-  const judgements = {};
-  for (const category of activeCategories()) {
-    for (const [left, right] of categoryPairs(category.criteria)) {
-      judgements[judgementKey(category.id, left.id, right.id)] = 9;
-    }
-  }
-  participant.judgements = { ...(participant.judgements || {}), ...judgements };
-  participant.complete = true;
   render();
 });
 

@@ -577,7 +577,7 @@ td input {
 
 .participant-panel {
   display: grid;
-  grid-template-columns: minmax(360px, 1.4fr) minmax(280px, 0.8fr) minmax(320px, 0.9fr);
+  grid-template-columns: minmax(420px, 1.4fr) minmax(340px, 0.9fr);
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -941,7 +941,7 @@ input[type="range"]::-moz-range-thumb {
 
 .ranking-chart {
   display: grid;
-  gap: 12px;
+  gap: 18px;
   margin-bottom: 1rem;
 }
 
@@ -955,6 +955,100 @@ input[type="range"]::-moz-range-thumb {
 
 .compact-label {
   font-size: 12px;
+}
+
+.ranking-visuals {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.1fr) minmax(360px, 0.9fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.chart-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr);
+  gap: 18px;
+  border: var(--border-std);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  padding: 18px 18px 18px 0;
+  overflow: hidden;
+}
+
+.chart-card h3 {
+  margin-bottom: 12px;
+}
+
+.chart-accent {
+  background: #E1F0EE;
+  min-height: 100%;
+}
+
+.proximity-map {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-axis {
+  stroke: #7F7F7F;
+  stroke-width: 1;
+}
+
+.chart-caption {
+  fill: #7F7F7F;
+  color: #7F7F7F;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.proximity-point text {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.ranking-bars {
+  display: grid;
+  gap: 13px;
+}
+
+.ranking-bar-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.34fr) minmax(180px, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.ranking-y-label {
+  color: #7F7F7F;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ranking-bar-track {
+  position: relative;
+  height: 28px;
+  background: var(--color-linen);
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.ranking-bar-fill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  background: #E8AF73;
+  color: #7A4A1E;
+  font-weight: 700;
+  padding-right: 10px;
+}
+
+.ranking-bar-fill.top-ranked {
+  background: #C06800;
+  color: #FBEFE3;
 }
 
 .rank-bar {
@@ -1034,7 +1128,8 @@ input[type="range"]::-moz-range-thumb {
 
   .split,
   .criteria-groups,
-  .alternative-form-head {
+  .alternative-form-head,
+  .ranking-visuals {
     grid-template-columns: 1fr;
   }
 
