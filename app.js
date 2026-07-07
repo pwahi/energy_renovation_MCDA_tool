@@ -1338,14 +1338,26 @@ function renderProximityMap(data) {
   const yDomainMax = yMax + yPad;
   const xScale = (value) => margin.left + ((value - xDomainMin) / (xDomainMax - xDomainMin || 1)) * plotWidth;
   const yScale = (value) => margin.top + (1 - ((value - yDomainMin) / (yDomainMax - yDomainMin || 1))) * plotHeight;
+  const pisPoint = { x: margin.left + 18, y: margin.top + 18 };
+  const nisPoint = { x: margin.left + plotWidth - 18, y: margin.top + plotHeight - 18 };
   const topThree = (item) => item.rank <= 3;
+  const guides = data.map((item) => {
+    const x = xScale(item.siPlus).toFixed(2);
+    const y = yScale(item.siMinus).toFixed(2);
+    return `
+      <line x1="${pisPoint.x}" y1="${pisPoint.y}" x2="${x}" y2="${y}" class="proximity-guide proximity-guide-pis"></line>
+      <line x1="${nisPoint.x}" y1="${nisPoint.y}" x2="${x}" y2="${y}" class="proximity-guide proximity-guide-nis"></line>
+    `;
+  }).join('');
   const points = data.map((item) => {
     const fill = topThree(item) ? '#C06800' : '#E8AF73';
     const text = topThree(item) ? '#FBEFE3' : '#7A4A1E';
+    const x = xScale(item.siPlus).toFixed(2);
+    const y = yScale(item.siMinus).toFixed(2);
     return `
       <g class="proximity-point">
-        <circle cx="${xScale(item.siPlus).toFixed(2)}" cy="${yScale(item.siMinus).toFixed(2)}" r="16" fill="${fill}"></circle>
-        <text x="${xScale(item.siPlus).toFixed(2)}" y="${(yScale(item.siMinus) + 4).toFixed(2)}" text-anchor="middle" fill="${text}">${item.rank}</text>
+        <circle cx="${x}" cy="${y}" r="11" fill="${fill}"></circle>
+        <text x="${x}" y="${(Number(y) + 3.5).toFixed(2)}" text-anchor="middle" fill="${text}">${item.rank}</text>
         <title>${escapeHtml(item.name)}: Si+ ${item.siPlus.toFixed(4)}, Si- ${item.siMinus.toFixed(4)}, Ci ${formatPercentComma(item.ci)}</title>
       </g>
     `;
@@ -1362,11 +1374,12 @@ function renderProximityMap(data) {
           <text x="${margin.left + plotWidth / 2}" y="${height - 24}" text-anchor="middle" class="chart-caption">Distance to ideal, Si+ (lower is better) →</text>
           <text x="${margin.left}" y="${height - 42}" class="chart-caption">Numbers show final rank</text>
           <text x="22" y="${margin.top + plotHeight / 2}" transform="rotate(-90 22 ${margin.top + plotHeight / 2})" text-anchor="middle" class="chart-caption">Distance from anti-ideal, Si- (higher is better)</text>
-          <g class="reference-marker" transform="translate(${margin.left + 18} ${margin.top + 18})">
+          ${guides}
+          <g class="reference-marker" transform="translate(${pisPoint.x} ${pisPoint.y})">
             <rect x="-7" y="-7" width="14" height="14" transform="rotate(45)" fill="#7F7F7F"></rect>
             <text x="14" y="4" class="chart-caption">PIS (ideal)</text>
           </g>
-          <g class="reference-marker" transform="translate(${margin.left + plotWidth - 18} ${margin.top + plotHeight - 18})">
+          <g class="reference-marker" transform="translate(${nisPoint.x} ${nisPoint.y})">
             <rect x="-7" y="-7" width="14" height="14" transform="rotate(45)" fill="#7F7F7F"></rect>
             <text x="-112" y="4" class="chart-caption">NIS (anti-ideal)</text>
           </g>
