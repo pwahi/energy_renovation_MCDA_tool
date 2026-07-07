@@ -1031,6 +1031,15 @@ function formatCrStatus(cr) {
   return `${cr.toFixed(3)} ${cr <= 0.1 ? 'OK' : 'review'}`;
 }
 
+function inconsistencyPrompt(category, result) {
+  if (!Number.isFinite(result.cr)) return 'Complete the comparisons to calculate CR.';
+  if (result.cr <= 0.1) return 'CR is acceptable. The judgements in this category are consistent enough to include.';
+  const deviations = result.consistencyVector.map((value) => Math.abs(value - result.lambdaMax));
+  const worstIndex = deviations.indexOf(Math.max(...deviations));
+  const criterion = category.criteria[worstIndex];
+  return `${criterion?.id || 'This criterion'} ${criterion?.name || ''} is driving the inconsistency most. Revisit comparisons involving this criterion.`;
+}
+
 function renderGroupWeights() {
   const summary = document.querySelector('#groupSummary');
   const bars = document.querySelector('#groupWeightBars');
@@ -1093,14 +1102,20 @@ function renderAHPDialog(participant) {
   if (!body || !title) return;
   ensureParticipantJudgements(participant);
   title.textContent = `${participant.name} pairwise comparisons`;
-  body.innerHTML = activeCategories().map((category) => {
+  body.innerHTML = `
+    <div class="helper">
+      <strong>How to read CR</strong>
+      <p>CR is the consistency ratio. CR at or below 0.10 is acceptable. If CR is above 0.10, the answers conflict with each other and that category should be reviewed before its weights are used.</p>
+    </div>
+    ${activeCategories().map((category) => {
     const profile = participantAHPProfile(participant).categoryResults.find((item) => item.category.id === category.id);
     return `
       <section class="ahp-category">
         <div class="category-headline">
           <h4>${escapeHtml(category.name)}</h4>
-          <span class="metric ${profile?.result.consistent ? 'pass' : 'fail'}">CR ${Number.isFinite(profile?.result.cr) ? profile.result.cr.toFixed(3) : 'n/a'}</span>
+          <span class="metric ${profile?.result.consistent ? 'pass' : 'fail'}" data-category-cr="${category.id}">CR ${formatCrStatus(profile?.result.cr)}</span>
         </div>
+        <div class="${profile?.result.consistent ? 'helper' : 'warning'}" data-category-prompt="${category.id}">${escapeHtml(inconsistencyPrompt(category, profile.result))}</div>
         ${category.criteria.length <= 1 ? '<p class="meta">Only one active criterion. Weight is 100%.</p>' : categoryPairs(category.criteria).map(([left, right]) => {
           const key = judgementKey(category.id, left.id, right.id);
           const position = clampPosition(participant.judgements[key]);
@@ -1122,7 +1137,27 @@ function renderAHPDialog(participant) {
         }).join('')}
       </section>
     `;
-  }).join('');
+  }).join('')}
+  `;
+}
+
+function updateDialogCategoryFeedback(participant, categoryId) {
+  const category = activeCategories().find((item) => item.id === categoryId);
+  if (!category) return;
+  const profile = participantAHPProfile(participant).categoryResults.find((item) => item.category.id === categoryId);
+  if (!profile) return;
+
+  const crEl = document.querySelector(`[data-category-cr="${categoryId}"]`);
+  if (crEl) {
+    crEl.className = `metric ${profile.result.consistent ? 'pass' : 'fail'}`;
+    crEl.textContent = `CR ${formatCrStatus(profile.result.cr)}`;
+  }
+
+  const promptEl = document.querySelector(`[data-category-prompt="${categoryId}"]`);
+  if (promptEl) {
+    promptEl.className = profile.result.consistent ? 'helper' : 'warning';
+    promptEl.textContent = inconsistencyPrompt(category, profile.result);
+  }
 }
 
 function renderWeights() {
@@ -1527,6 +1562,7 @@ document.addEventListener('input', (event) => {
     renderGroupWeights();
     renderComparisons();
     renderRanking();
+    updateDialogCategoryFeedback(participant, event.target.dataset.judgement.split('|')[0]);
     saveState();
   }
 
