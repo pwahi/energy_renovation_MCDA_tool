@@ -1467,7 +1467,7 @@ function renderRanking() {
     : '<div class="warning">Enter complete scores for at least one alternative before ranking.</div>';
   table.innerHTML = `
     <thead>
-      <tr><th>Rank</th><th>Alternative</th><th>Level</th><th>Si+</th><th>Si-</th><th>Ci</th></tr>
+      <tr><th>Rank</th><th>Alternative</th><th>Level</th><th>Distance to ideal</th><th>Distance from anti-ideal</th><th>Closeness score</th></tr>
     </thead>
     <tbody>
       ${results.map((result, index) => `
