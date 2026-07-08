@@ -51,7 +51,7 @@ const defaultCriteria = [
   { id: 'C8', name: 'Life cycle costs (30yr)', unit: 'EUR', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '' },
   { id: 'C9', name: 'Payback period', unit: 'years', pillar: 'Economic', direction: 'min', mandatory: false, active: true, benchmarkType: 'numeric-max', benchmarkValue: '20' },
   { id: 'C10', name: 'Thermal comfort', unit: 'hours', pillar: 'Social', direction: 'min', mandatory: true, active: true, benchmarkType: 'none', benchmarkValue: '', baseComparison: true },
-  { id: 'C11', name: 'Renovation nuisance', unit: 'days', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'none', benchmarkValue: '' },
+  { id: 'C11', name: 'Renovation nuisance', unit: 'rating (1-5)', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'none', benchmarkValue: '' },
   { id: 'C12', name: 'Energy cost savings', unit: 'EUR/yr', pillar: 'Social', direction: 'max', mandatory: false, active: true, benchmarkType: 'none', benchmarkValue: '' },
   { id: 'C13', name: 'Rent increment', unit: 'EUR/month', pillar: 'Social', direction: 'min', mandatory: false, active: false, benchmarkType: 'numeric-max', benchmarkValue: '26.50' },
 ];
@@ -247,6 +247,9 @@ function normalizeCriteria(criteria) {
     const normalizedCriterion = {
       ...criterion,
       ...normalizedBenchmark,
+      unit: criterion.id === 'C11' && normalizeLabel(criterion.unit).toLowerCase() === 'days'
+        ? defaultCriterion?.unit || 'rating (1-5)'
+        : criterion.unit,
       baseComparison: isBaseComparableCriterion(criterion)
         ? criterion.baseComparison !== false || legacyBaseComparison
         : false,
@@ -490,6 +493,10 @@ function isEnergyLabelCriterion(criterion) {
     || /label/i.test(`${criterion.name} ${criterion.unit}`);
 }
 
+function isRenovationNuisanceCriterion(criterion) {
+  return criterion.id === 'C11' || /renovation nuisance/i.test(criterion.name);
+}
+
 function baseAlternative() {
   return state.alternatives.find((alternative) => alternative.isBaseCase);
 }
@@ -605,7 +612,7 @@ function renderAlternativeForm() {
           <strong>${escapeHtml(criterion.id)} ${escapeHtml(criterion.name)}</strong>
           <span class="meta">${escapeHtml(criterion.unit)} | ${criterion.direction === 'min' ? 'Minimize' : 'Maximize'}</span>
         </span>
-        <input name="score-${escapeHtml(criterion.id)}" data-new-score="${escapeHtml(criterion.id)}" placeholder="${escapeHtml(alternativeScorePlaceholder(criterion))}" required />
+        <input name="score-${escapeHtml(criterion.id)}" data-new-score="${escapeHtml(criterion.id)}" ${scoreInputAttributes(criterion)} placeholder="${escapeHtml(alternativeScorePlaceholder(criterion))}" required />
       </label>
     `).join('')
     : '<div class="warning">Activate at least one criterion before adding alternatives.</div>';
@@ -613,8 +620,15 @@ function renderAlternativeForm() {
 
 function alternativeScorePlaceholder(criterion) {
   if (isEnergyLabelCriterion(criterion)) return 'e.g. B, A, A++';
+  if (isRenovationNuisanceCriterion(criterion)) return '1 = minimum nuisance, 5 = maximum nuisance';
   if (criterion.unit) return `Enter ${criterion.unit}`;
   return 'Enter performance value';
+}
+
+function scoreInputAttributes(criterion) {
+  if (isRenovationNuisanceCriterion(criterion)) return 'type="number" min="1" max="5" step="1"';
+  if (isEnergyLabelCriterion(criterion)) return '';
+  return 'type="number" step="any"';
 }
 
 function renderCriteria() {
@@ -715,7 +729,7 @@ function renderScores() {
           </td>
           ${criteria.map((criterion) => `
             <td>
-              <input data-score-alt="${alternative.id}" data-score-criterion="${criterion.id}" value="${escapeHtml(alternative.scores[criterion.id] ?? '')}" />
+              <input data-score-alt="${alternative.id}" data-score-criterion="${criterion.id}" ${scoreInputAttributes(criterion)} value="${escapeHtml(alternative.scores[criterion.id] ?? '')}" />
               <div class="meta">${criterion.unit}</div>
             </td>
           `).join('')}
