@@ -1003,6 +1003,13 @@ input[type="range"]::-moz-range-thumb {
   font-weight: 500;
 }
 
+.chart-note {
+  margin: -6px 0 14px;
+  color: #7F7F7F;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .proximity-guide {
   stroke: #7F7F7F;
   stroke-width: 0.8;

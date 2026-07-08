@@ -1283,8 +1283,8 @@ function rankingWeightContext() {
   return { weights: equalWeights(criteria), label: 'Equal fallback weights (no consistent participant profiles yet)' };
 }
 
-function formatPercentComma(value) {
-  return `${(value * 100).toFixed(2).replace('.', ',')}%`;
+function formatTopsisScore(value) {
+  return value.toFixed(3);
 }
 
 function calculateTopsis() {
@@ -1372,7 +1372,7 @@ function renderProximityMap(data) {
       <g class="proximity-point">
         <circle cx="${x}" cy="${y}" r="11" fill="${fill}"></circle>
         <text x="${x}" y="${(Number(y) + 3.5).toFixed(2)}" text-anchor="middle" fill="${text}">${item.rank}</text>
-        <title>${escapeHtml(item.name)}: Si+ ${item.siPlus.toFixed(4)}, Si- ${item.siMinus.toFixed(4)}, Ci ${formatPercentComma(item.ci)}</title>
+        <title>${escapeHtml(item.name)}: Si+ ${item.siPlus.toFixed(4)}, Si- ${item.siMinus.toFixed(4)}, TOPSIS score ${formatTopsisScore(item.ci)}</title>
       </g>
     `;
   }).join('');
@@ -1424,6 +1424,7 @@ function renderRankingBarChart(data) {
       <div class="chart-accent"></div>
       <div>
         <h3>Ranking chart</h3>
+        <p class="chart-note">TOPSIS score ranges from 0 to 1. Higher score means closer to the ideal renovation option.</p>
         <div class="ranking-bars">
           ${sorted.map((item) => {
             const isTop = item.rank <= 3;
@@ -1432,7 +1433,7 @@ function renderRankingBarChart(data) {
                 <div class="ranking-y-label">${escapeHtml(item.name)}</div>
                 <div class="ranking-bar-track">
                   <div class="ranking-bar-fill ${isTop ? 'top-ranked' : ''}" style="width:${Math.max(0, Math.min(100, item.ci * 100)).toFixed(2)}%">
-                    <span>${formatPercentComma(item.ci)}</span>
+                    <span>${formatTopsisScore(item.ci)}</span>
                   </div>
                 </div>
               </div>
